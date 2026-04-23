@@ -4,6 +4,7 @@ import com.proyecto.cafetin.data.db.AppDatabase
 import com.proyecto.cafetin.data.model.Movimiento
 import com.proyecto.cafetin.data.model.Persona
 import com.proyecto.cafetin.data.model.TipoMovimiento
+import com.proyecto.cafetin.util.DateUtils.inicioDeDia
 import kotlinx.coroutines.flow.Flow
 import java.util.Calendar
 
@@ -43,16 +44,6 @@ class CafetinRepository(db: AppDatabase) {
 
     fun cobradoHoy(): Flow<Long> =
         movimientoDao.getCobradoDesde(inicioDeDia(System.currentTimeMillis()))
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-    fun inicioDeDia(fechaMs: Long): Long =
-        Calendar.getInstance().apply {
-            timeInMillis = fechaMs
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0);      set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-
-    fun finDeDia(fechaMs: Long): Long = inicioDeDia(fechaMs) + 24 * 60 * 60 * 1000L
 
     // ── Semántica ─────────────────────────────────────────────────────────────
     suspend fun registrarFiado(personaId: Int, montoCentavos: Long, nota: String = "") {

@@ -1,14 +1,13 @@
 package com.proyecto.cafetin.util
 
 import android.content.Context
-import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
-import android.os.Environment
 import androidx.core.content.FileProvider
 import com.proyecto.cafetin.data.model.Movimiento
 import com.proyecto.cafetin.data.model.TipoMovimiento
+import com.proyecto.cafetin.util.MoneyUtils.centavosAtexto
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -178,7 +177,7 @@ object PdfExporter {
                     val hora       = sdfHora.format(Date(mov.fecha))
                     val nota       = mov.nota.ifBlank { if (mov.tipo == TipoMovimiento.PAGO) "Pago" else "Fiado" }
                     val esPago     = mov.tipo == TipoMovimiento.PAGO
-                    val montoTexto = if (esPago) "+${mov.monto.fmt()}" else "−${mov.monto.fmt()}"
+                    val montoTexto = if (esPago) "+${mov.monto.centavosAtexto()}" else "−${mov.monto.centavosAtexto()}"
                     val pMonto     = if (esPago) pMontoPago else pMontoFiado
                     val prefijo    = if (esPago) "↑" else "↓"
 
@@ -199,7 +198,7 @@ object PdfExporter {
                 val fiadoDia   = movsDelDia.filter { it.tipo == TipoMovimiento.FIADO  }.sumOf { it.monto }
                 val cobradoDia = movsDelDia.filter { it.tipo == TipoMovimiento.PAGO   }.sumOf { it.monto }
                 checkPagina(20f)
-                val subtotalTxt = "Subtotal día: fiado ${fiadoDia.fmt()}  •  cobrado ${cobradoDia.fmt()}"
+                val subtotalTxt = "Subtotal día: fiado ${fiadoDia.centavosAtexto()}  •  cobrado ${cobradoDia.centavosAtexto()}"
                 canvas.drawText(subtotalTxt, MARGIN, y, pSubtitulo)
                 y += 24f
             }
@@ -215,13 +214,13 @@ object PdfExporter {
         val pendiente    = totalFiado - totalCobrado
 
         canvas.drawText("Total fiado:",   MARGIN, y, pTotal)
-        val fw = pTotalMonto.measureText(totalFiado.fmt())
-        canvas.drawText(totalFiado.fmt(), PAGE_WIDTH - MARGIN - fw, y, pMontoFiado)
+        val fw = pTotalMonto.measureText(totalFiado.centavosAtexto())
+        canvas.drawText(totalFiado.centavosAtexto(), PAGE_WIDTH - MARGIN - fw, y, pMontoFiado)
         y += 20f
 
         canvas.drawText("Total cobrado:", MARGIN, y, pTotal)
-        val cw = pMontoPago.measureText(totalCobrado.fmt())
-        canvas.drawText(totalCobrado.fmt(), PAGE_WIDTH - MARGIN - cw, y, pMontoPago)
+        val cw = pMontoPago.measureText(totalCobrado.centavosAtexto())
+        canvas.drawText(totalCobrado.centavosAtexto(), PAGE_WIDTH - MARGIN - cw, y, pMontoPago)
         y += 20f
 
         canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, pLinea)
@@ -230,8 +229,8 @@ object PdfExporter {
         val pendientePaint = if (pendiente > 0) pTotalMonto else pMontoPago
         val pendienteTxt   = if (pendiente > 0) "Saldo pendiente" else "Saldo saldado ✓"
         canvas.drawText(pendienteTxt, MARGIN, y, pTotal)
-        val pw = pendientePaint.measureText(pendiente.fmt())
-        canvas.drawText(pendiente.fmt(), PAGE_WIDTH - MARGIN - pw, y, pendientePaint)
+        val pw = pendientePaint.measureText(pendiente.centavosAtexto())
+        canvas.drawText(pendiente.centavosAtexto(), PAGE_WIDTH - MARGIN - pw, y, pendientePaint)
 
         doc.finishPage(page)
 
@@ -254,9 +253,4 @@ object PdfExporter {
             "${context.packageName}.provider",
             file
         )
-
-    private fun Long.fmt(): String {
-        val abs = kotlin.math.abs(this)
-        return "S/${abs / 100}.${ "%02d".format(abs % 100) }"
-    }
 }

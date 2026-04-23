@@ -11,12 +11,15 @@ import com.proyecto.cafetin.data.model.Movimiento
 import com.proyecto.cafetin.data.model.Persona
 import com.proyecto.cafetin.data.model.TipoMovimiento
 import com.proyecto.cafetin.repository.CafetinRepository
+import com.proyecto.cafetin.util.DateUtils.finDeDiaHoy
+import com.proyecto.cafetin.util.DateUtils.inicioDeDiaHoy
+import com.proyecto.cafetin.util.MoneyUtils.centavosAtexto
+import com.proyecto.cafetin.util.NotaUtils.cantidadDeNota
+import com.proyecto.cafetin.util.NotaUtils.notaBase
 import com.proyecto.cafetin.util.PdfExporter
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.util.Calendar
-import java.util.TimeZone
 
 /** Estado del diálogo de exportación */
 data class ExportState(
@@ -61,7 +64,7 @@ class DetalleViewModel(app: Application, val personaId: Int) : AndroidViewModel(
     fun registrarFiado(montoCentavos: Long, nota: String) {
         viewModelScope.launch {
             repo.registrarFiado(personaId, montoCentavos, nota)
-            _snackEvents.send("$nota anotado — ${montoCentavos.fmt()}")
+            _snackEvents.send("$nota anotado — ${montoCentavos.centavosAtexto()}")
         }
     }
 
@@ -79,7 +82,7 @@ class DetalleViewModel(app: Application, val personaId: Int) : AndroidViewModel(
             // Busca en la lista actual de hoy si ya existe un fiado con esa nota base
             val existente = movimientos.value.firstOrNull { mov ->
                 mov.tipo == TipoMovimiento.FIADO &&
-                notaBaseDeNota(mov.nota) == notaBase
+                        notaBase(mov.nota) == notaBase
             }
 
             if (existente != null) {
@@ -90,11 +93,11 @@ class DetalleViewModel(app: Application, val personaId: Int) : AndroidViewModel(
                 val nuevaNota      = "$notaBase x$nuevaCantidad"
 
                 repo.editarMovimiento(existente.copy(monto = nuevoMonto, nota = nuevaNota))
-                _snackEvents.send("$nuevaNota — ${nuevoMonto.fmt()}")
+                _snackEvents.send("$nuevaNota — ${nuevoMonto.centavosAtexto()}")
             } else {
                 // Primer toque: INSERT con "Nombre x1"
                 repo.registrarFiado(personaId, precioCentavos, "$notaBase x1")
-                _snackEvents.send("$notaBase x1 — ${precioCentavos.fmt()}")
+                _snackEvents.send("$notaBase x1 — ${precioCentavos.centavosAtexto()}")
             }
         }
     }
@@ -112,7 +115,7 @@ class DetalleViewModel(app: Application, val personaId: Int) : AndroidViewModel(
             } else {
                 val nuevaCantidad = cantidadActual - 1
                 val nuevoMonto    = precioCentavos * nuevaCantidad
-                val notaBase      = notaBaseDeNota(mov.nota)
+                val notaBase      = notaBase(mov.nota)
                 val nuevaNota     = "$notaBase x$nuevaCantidad"
                 repo.editarMovimiento(mov.copy(monto = nuevoMonto, nota = nuevaNota))
             }
@@ -122,7 +125,7 @@ class DetalleViewModel(app: Application, val personaId: Int) : AndroidViewModel(
     fun registrarPago(montoCentavos: Long) {
         viewModelScope.launch {
             repo.registrarPago(personaId, montoCentavos)
-            _snackEvents.send("Pago registrado — ${montoCentavos.fmt()}")
+            _snackEvents.send("Pago registrado — ${montoCentavos.centavosAtexto()}")
         }
     }
 
@@ -201,37 +204,6 @@ class DetalleViewModel(app: Application, val personaId: Int) : AndroidViewModel(
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    // ✅ CORRECTO — sin TimeZone.getTimeZone("UTC"), usa la zona local del teléfono
-    private fun inicioDeDiaHoy(): Long =
-        Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0);      set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-
-    private fun finDeDiaHoy(): Long = inicioDeDiaHoy() + 24 * 60 * 60 * 1000L - 1
-
-    private fun Long.fmt(): String {
-        val abs = kotlin.math.abs(this)
-        return "S/${abs / 100}.${ "%02d".format(abs % 100) }"
-    }
-
-    /**
-     * Extrae la nota base quitando el sufijo " xN".
-     * "Refresco x3" → "Refresco"
-     * "Refresco"    → "Refresco"  (sin sufijo, caso de movimientos manuales)
-     */
-    private fun notaBaseDeNota(nota: String): String =
-        Regex(""" x\d+$""").replace(nota, "").trim()
-
-    /**
-     * Extrae la cantidad del sufijo " xN".
-     * "Refresco x3" → 3
-     * "Refresco"    → 1  (sin sufijo = una unidad)
-     */
-    private fun cantidadDeNota(nota: String): Int =
-        Regex(""" x(\d+)$""").find(nota)?.groupValues?.get(1)?.toIntOrNull() ?: 1
-
     class Factory(private val app: Application, private val personaId: Int) :
         ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")

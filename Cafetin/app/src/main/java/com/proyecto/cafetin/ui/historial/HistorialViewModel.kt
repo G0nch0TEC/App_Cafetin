@@ -8,10 +8,10 @@ import com.proyecto.cafetin.data.model.Movimiento
 import com.proyecto.cafetin.data.model.Persona
 import com.proyecto.cafetin.data.model.TipoMovimiento
 import com.proyecto.cafetin.repository.CafetinRepository
+import com.proyecto.cafetin.util.DateUtils.inicioDeDiaHoy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.util.Calendar
 
 data class ResumenDia(
     val totalFiado: Long,
@@ -107,11 +107,4 @@ class HistorialViewModel(app: Application) : AndroidViewModel(app) {
     fun eliminarMovimiento(movimiento: Movimiento) {
         viewModelScope.launch { repo.eliminarMovimiento(movimiento) }
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-    private fun inicioDeDiaHoy(): Long =
-        Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0);      set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
 }
