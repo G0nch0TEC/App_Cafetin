@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!--
+        Permite compartir archivos desde context.filesDir/reportes/
+        que es donde PdfExporter guarda los PDFs generados.
+    -->
+    <files-path
+        name="reportes"
+        path="reportes/" />
+</paths>
