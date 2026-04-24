@@ -1,13 +1,11 @@
 package com.proyecto.cafetin.ui.historial
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.proyecto.cafetin.data.db.AppDatabase
 import com.proyecto.cafetin.data.model.Movimiento
 import com.proyecto.cafetin.data.model.Persona
 import com.proyecto.cafetin.data.model.TipoMovimiento
-import com.proyecto.cafetin.repository.CafetinRepository
+import com.proyecto.cafetin.repository.ICafetinRepository
 import com.proyecto.cafetin.util.DateUtils.inicioDeDiaHoy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
@@ -28,9 +26,7 @@ data class GrupoPersona(
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class HistorialViewModel(app: Application) : AndroidViewModel(app) {
-
-    private val repo = CafetinRepository(AppDatabase.getInstance(app))
+class HistorialViewModel(private val repository: ICafetinRepository) : ViewModel() {
 
     // ── Día visible ───────────────────────────────────────────────────────────
     private val _diaActual = MutableStateFlow(inicioDeDiaHoy())
@@ -47,10 +43,10 @@ class HistorialViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Movimientos del día ───────────────────────────────────────────────────
     private val movimientosDia: StateFlow<List<Movimiento>> = _diaActual
-        .flatMapLatest { repo.movimientosPorDia(it) }
+        .flatMapLatest { repository.movimientosPorDia(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val personas: StateFlow<List<Persona>> = repo.personas
+    val personas: StateFlow<List<Persona>> = repository.personas
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     // ── Grupos por persona (con filtro de búsqueda aplicado) ─────────────────
@@ -105,6 +101,6 @@ class HistorialViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun eliminarMovimiento(movimiento: Movimiento) {
-        viewModelScope.launch { repo.eliminarMovimiento(movimiento) }
+        viewModelScope.launch { repository.eliminarMovimiento(movimiento) }
     }
 }

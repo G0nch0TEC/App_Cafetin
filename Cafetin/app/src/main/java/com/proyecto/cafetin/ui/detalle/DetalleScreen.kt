@@ -34,12 +34,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.proyecto.cafetin.CafetinApp
 import com.proyecto.cafetin.data.ProductosCatalogo
 import com.proyecto.cafetin.data.model.Movimiento
 import com.proyecto.cafetin.data.model.Producto.ProductoRapido
 import com.proyecto.cafetin.data.model.Producto.CategoriaProductos
 import com.proyecto.cafetin.data.model.TipoMovimiento
-import com.proyecto.cafetin.ui.personas.*
+import com.proyecto.cafetin.ui.theme.*
+import com.proyecto.cafetin.util.MoneyUtils.centavosAtexto
 import com.proyecto.cafetin.util.NotaUtils.notaBase
 import java.text.SimpleDateFormat
 import java.util.*
@@ -50,8 +52,8 @@ fun DetalleScreen(
     personaId: Int,
     onBack: () -> Unit,
 ) {
-    val app = LocalContext.current.applicationContext as Application
-    val vm: DetalleViewModel = viewModel(factory = DetalleViewModel.Factory(app, personaId))
+    val app = LocalContext.current.applicationContext as CafetinApp
+    val vm: DetalleViewModel = viewModel(factory = DetalleViewModel.Factory(app.container.repository, personaId))
     val context = LocalContext.current
 
     val persona     by vm.persona.collectAsState()
@@ -115,7 +117,7 @@ fun DetalleScreen(
                     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
                         val chipBg  = if (saldo > 0) Color(0xFFF9DEDC) else OkGreenBg
                         val chipFg  = if (saldo > 0) Color(0xFF410E0B) else OkGreen
-                        val chipTxt = if (saldo > 0) "Debe ${saldo.centavosATexto()}" else "Al día"
+                        val chipTxt = if (saldo > 0) "Debe ${saldo.centavosAtexto()}" else "Al día"
                         Box(
                             Modifier
                                 .clip(RoundedCornerShape(100.dp))
@@ -256,7 +258,7 @@ fun DetalleScreen(
                                 modifier = Modifier.height(52.dp)
                             ) {
                                 Text(
-                                    if (saldo > 0) "Todo ${saldo.centavosATexto()}" else "Sin deuda",
+                                    if (saldo > 0) "Todo ${saldo.centavosAtexto()}" else "Sin deuda",
                                     fontSize = 13.sp, fontWeight = FontWeight.Medium
                                 )
                             }
@@ -280,7 +282,7 @@ fun DetalleScreen(
             title = { Text(label, textAlign = TextAlign.Center) },
             text  = {
                 Text(
-                    "¿Registrar pago de ${centavos.centavosATexto()} de ${persona?.nombre}?",
+                    "¿Registrar pago de ${centavos.centavosAtexto()} de ${persona?.nombre}?",
                     textAlign = TextAlign.Center
                 )
             },
@@ -450,7 +452,7 @@ private fun MovimientoRow(
     val esPago     = mov.tipo == TipoMovimiento.PAGO
     val iconBg     = if (esPago) OkGreenBg else Color(0xFFF9DEDC)
     val iconFg     = if (esPago) OkGreen   else Color(0xFF410E0B)
-    val montoTexto = if (esPago) "+${mov.monto.centavosATexto()}" else "−${mov.monto.centavosATexto()}"
+    val montoTexto = if (esPago) "+${mov.monto.centavosAtexto()}" else "−${mov.monto.centavosAtexto()}"
     val montoColor = if (esPago) OkGreen   else DebtRed
     val sdf        = remember { SimpleDateFormat("d MMM · h:mm a", Locale("es")) }
     val fecha      = remember(mov.fecha) { sdf.format(Date(mov.fecha)) }

@@ -1,11 +1,9 @@
 package com.proyecto.cafetin.ui.personas
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.proyecto.cafetin.data.db.AppDatabase
 import com.proyecto.cafetin.data.model.Persona
-import com.proyecto.cafetin.repository.CafetinRepository
+import com.proyecto.cafetin.repository.ICafetinRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,17 +15,15 @@ import kotlinx.coroutines.launch
 enum class OrdenPersonas { NOMBRE, MAYOR_DEUDA, AL_DIA_PRIMERO }
 enum class FiltroPersonas { TODOS, CON_DEUDA, AL_DIA }
 
-class PersonasViewModel(app: Application) : AndroidViewModel(app) {
+class PersonasViewModel(private val repository: ICafetinRepository, val personaId: Int) : ViewModel() {
 
-    private val repo = CafetinRepository(AppDatabase.getInstance(app))
-
-    val personas: StateFlow<List<Persona>> = repo.personas
+    val personas: StateFlow<List<Persona>> = repository.personas
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val saldoTotal: StateFlow<Long> = repo.saldoTotal
+    val saldoTotal: StateFlow<Long> = repository.saldoTotal
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
-    val cobradoHoy: StateFlow<Long> = repo.cobradoHoy()
+    val cobradoHoy: StateFlow<Long> = repository.cobradoHoy()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
     private val _saldosPorPersona = MutableStateFlow<Map<Int, Long>>(emptyMap())
@@ -60,7 +56,7 @@ class PersonasViewModel(app: Application) : AndroidViewModel(app) {
                 // Iniciar collector solo para personas nuevas (sin job activo)
                 lista.filter { it.id !in saldoJobs }.forEach { persona ->
                     saldoJobs[persona.id] = launch {
-                        repo.saldoPorPersona(persona.id).collect { saldo ->
+                        repository.saldoPorPersona(persona.id).collect { saldo ->
                             _saldosPorPersona.value = _saldosPorPersona.value + (persona.id to saldo)
                         }
                     }
@@ -76,13 +72,13 @@ class PersonasViewModel(app: Application) : AndroidViewModel(app) {
     fun agregarPersona(nombre: String, descripcion: String) {
         if (nombre.isBlank()) return
         viewModelScope.launch {
-            repo.insertPersona(Persona(nombre = nombre.trim(), descripcion = descripcion.trim()))
+            repository.insertPersona(Persona(nombre = nombre.trim(), descripcion = descripcion.trim()))
         }
     }
 
     fun eliminarPersona(persona: Persona) {
         viewModelScope.launch {
-            repo.deletePersona(persona)
+            repository.deletePersona(persona)
         }
     }
 }

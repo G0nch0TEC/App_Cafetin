@@ -1,8 +1,5 @@
 package com.proyecto.cafetin.ui.personas
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -32,29 +29,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.proyecto.cafetin.data.model.Persona
+import com.proyecto.cafetin.ui.UiUtils.iniciales
+import com.proyecto.cafetin.ui.theme.*
+import com.proyecto.cafetin.util.MoneyUtils.centavosAtexto
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-// Colores del prototipo — definidos aquí y reutilizados desde DetalleScreen vía import *
-val PrimaryColor       = Color(0xFF6750A4)
-val PrimaryContainer   = Color(0xFFEADDFF)
-val OnPrimaryContainer = Color(0xFF21005D)
-val DebtRed            = Color(0xFFA32D2D)
-val DebtRedBg          = Color(0xFFFCEBEB)
-val OkGreen            = Color(0xFF27500A)
-val OkGreenBg          = Color(0xFFEAF3DE)
-val SurfaceGray        = Color(0xFFF5F5F5)
-val TextGray           = Color(0xFF757575)
-
-fun Long.centavosATexto(): String {
-    val signo = if (this < 0) "-" else ""
-    val abs = Math.abs(this)
-    return "${signo}S/${abs / 100}.${ "%02d".format(abs % 100) }"
-}
-
-fun iniciales(nombre: String): String =
-    nombre.trim().split(" ").take(2).mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("")
 
 @Composable
 fun PersonasScreen(
@@ -146,8 +126,8 @@ fun PersonasScreen(
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    StatCard("Pendiente total", saldoTotal.centavosATexto(), DebtRed, Modifier.weight(1f))
-                    StatCard("Cobrado hoy",     cobradoHoy.centavosATexto(), OkGreen, Modifier.weight(1f))
+                    StatCard("Pendiente total", saldoTotal.centavosAtexto(), DebtRed, Modifier.weight(1f))
+                    StatCard("Cobrado hoy",     cobradoHoy.centavosAtexto(), OkGreen, Modifier.weight(1f))
                 }
             }
 
@@ -427,7 +407,7 @@ fun PersonaRow(persona: Persona, saldo: Long, onClick: () -> Unit, onDelete: () 
                     .clip(RoundedCornerShape(100.dp))
                     .background(DebtRedBg)
                     .padding(horizontal = 10.dp, vertical = 4.dp)
-            ) { Text(saldo.centavosATexto(), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = DebtRed) }
+            ) { Text(saldo.centavosAtexto(), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = DebtRed) }
         } else {
             Box(
                 Modifier

@@ -1,16 +1,15 @@
 package com.proyecto.cafetin.ui.detalle
 
-import android.app.Application
 import android.content.Context
 import android.content.Intent
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.proyecto.cafetin.data.db.AppDatabase
 import com.proyecto.cafetin.data.model.Movimiento
 import com.proyecto.cafetin.data.model.Persona
 import com.proyecto.cafetin.data.model.TipoMovimiento
 import com.proyecto.cafetin.repository.CafetinRepository
+import com.proyecto.cafetin.repository.ICafetinRepository
 import com.proyecto.cafetin.util.DateUtils.finDeDiaHoy
 import com.proyecto.cafetin.util.DateUtils.inicioDeDiaHoy
 import com.proyecto.cafetin.util.MoneyUtils.centavosAtexto
@@ -28,17 +27,14 @@ data class ExportState(
     val error: String?     = null
 )
 
-class DetalleViewModel(app: Application, val personaId: Int) : AndroidViewModel(app) {
-
-    private val repo = CafetinRepository(AppDatabase.getInstance(app))
-
+class DetalleViewModel(private val repository: ICafetinRepository, val personaId: Int) : ViewModel() {
     private val _persona = MutableStateFlow<Persona?>(null)
     val persona: StateFlow<Persona?> = _persona.asStateFlow()
 
-    val saldo: StateFlow<Long> = repo.saldoPorPersona(personaId)
+    val saldo: StateFlow<Long> = repository.saldoPorPersona(personaId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
-    val movimientos: StateFlow<List<Movimiento>> = repo.movimientosPorPersonaHoy(personaId)
+    val movimientos: StateFlow<List<Movimiento>> = repository.movimientosPorPersonaHoy(personaId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _snackEvents = Channel<String>(Channel.BUFFERED)
@@ -55,7 +51,7 @@ class DetalleViewModel(app: Application, val personaId: Int) : AndroidViewModel(
 
     init {
         viewModelScope.launch {
-            repo.personas.collect { lista ->
+            repository.personas.collect { lista ->
                 _persona.value = lista.find { it.id == personaId }
             }
         }
@@ -63,7 +59,7 @@ class DetalleViewModel(app: Application, val personaId: Int) : AndroidViewModel(
 
     fun registrarFiado(montoCentavos: Long, nota: String) {
         viewModelScope.launch {
-            repo.registrarFiado(personaId, montoCentavos, nota)
+            repository.registrarFiado(personaId, montoCentavos, nota)
             _snackEvents.send("$nota anotado — ${montoCentavos.centavosAtexto()}")
         }
     }
@@ -92,11 +88,11 @@ class DetalleViewModel(app: Application, val personaId: Int) : AndroidViewModel(
                 val nuevoMonto     = precioCentavos * nuevaCantidad
                 val nuevaNota      = "$notaBase x$nuevaCantidad"
 
-                repo.editarMovimiento(existente.copy(monto = nuevoMonto, nota = nuevaNota))
+                repository.editarMovimiento(existente.copy(monto = nuevoMonto, nota = nuevaNota))
                 _snackEvents.send("$nuevaNota — ${nuevoMonto.centavosAtexto()}")
             } else {
                 // Primer toque: INSERT con "Nombre x1"
-                repo.registrarFiado(personaId, precioCentavos, "$notaBase x1")
+                repository.registrarFiado(personaId, precioCentavos, "$notaBase x1")
                 _snackEvents.send("$notaBase x1 — ${precioCentavos.centavosAtexto()}")
             }
         }
@@ -111,26 +107,26 @@ class DetalleViewModel(app: Application, val personaId: Int) : AndroidViewModel(
             val cantidadActual = cantidadDeNota(mov.nota)
             if (cantidadActual <= 1) {
                 // Quedaba 1 → eliminar el movimiento
-                repo.eliminarMovimiento(mov)
+                repository.eliminarMovimiento(mov)
             } else {
                 val nuevaCantidad = cantidadActual - 1
                 val nuevoMonto    = precioCentavos * nuevaCantidad
                 val notaBase      = notaBase(mov.nota)
                 val nuevaNota     = "$notaBase x$nuevaCantidad"
-                repo.editarMovimiento(mov.copy(monto = nuevoMonto, nota = nuevaNota))
+                repository.editarMovimiento(mov.copy(monto = nuevoMonto, nota = nuevaNota))
             }
         }
     }
 
     fun registrarPago(montoCentavos: Long) {
         viewModelScope.launch {
-            repo.registrarPago(personaId, montoCentavos)
+            repository.registrarPago(personaId, montoCentavos, "Pago")
             _snackEvents.send("Pago registrado — ${montoCentavos.centavosAtexto()}")
         }
     }
 
     fun eliminarMovimiento(mov: Movimiento) {
-        viewModelScope.launch { repo.eliminarMovimiento(mov) }
+        viewModelScope.launch { repository.eliminarMovimiento(mov) }
     }
 
     fun enviarError(msg: String) {
@@ -163,7 +159,7 @@ class DetalleViewModel(app: Application, val personaId: Int) : AndroidViewModel(
         _exportState.value = _exportState.value.copy(generando = true, error = null)
 
         viewModelScope.launch {
-            val movs = repo.movimientosPorPersonaEnRango(
+            val movs = repository.movimientosPorPersonaEnRango(
                 personaId, _desdeMs.value, _hastaMs.value
             )
 
@@ -204,10 +200,14 @@ class DetalleViewModel(app: Application, val personaId: Int) : AndroidViewModel(
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-    class Factory(private val app: Application, private val personaId: Int) :
-        ViewModelProvider.Factory {
+    class Factory(
+        private val repository: CafetinRepository,
+        private val personaId: Int
+    ) : ViewModelProvider.Factory {
+
         @Suppress("UNCHECKED_CAST")
-        override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T =
-            DetalleViewModel(app, personaId) as T
+        override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+            return DetalleViewModel(repository, personaId) as T
+        }
     }
 }

@@ -1,6 +1,5 @@
 package com.proyecto.cafetin.ui.historial
 
-import android.app.Application
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -30,20 +29,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.proyecto.cafetin.CafetinApp
 import com.proyecto.cafetin.data.model.Movimiento
 import com.proyecto.cafetin.data.model.TipoMovimiento
-import com.proyecto.cafetin.ui.personas.*
+import com.proyecto.cafetin.ui.UiUtils.iniciales
+import com.proyecto.cafetin.ui.theme.*
+import com.proyecto.cafetin.util.MoneyUtils.centavosAtexto
 import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable
 fun HistorialScreen(onBack: () -> Unit) {
-    val app = LocalContext.current.applicationContext as Application
+    val app = LocalContext.current.applicationContext as CafetinApp
     val vm: HistorialViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T =
-                HistorialViewModel(app) as T
+                HistorialViewModel(app.container.repository) as T
         }
     )
 
@@ -174,8 +176,8 @@ fun HistorialScreen(onBack: () -> Unit) {
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            ResumenCard("Fiado del día",  resumen.totalFiado.centavosATexto(),   DebtRed, Modifier.weight(1f))
-                            ResumenCard("Cobrado",        resumen.totalCobrado.centavosATexto(), OkGreen, Modifier.weight(1f))
+                            ResumenCard("Fiado del día",  resumen.totalFiado.centavosAtexto(),   DebtRed, Modifier.weight(1f))
+                            ResumenCard("Cobrado",        resumen.totalCobrado.centavosAtexto(), OkGreen, Modifier.weight(1f))
                         }
                         if (resumen.totalFiado > 0 || resumen.totalCobrado > 0) {
                             val netoColor = if (resumen.neto > 0) DebtRed else OkGreen
@@ -189,7 +191,7 @@ fun HistorialScreen(onBack: () -> Unit) {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(netoLabel, fontSize = 12.sp, color = TextGray)
-                                Text(resumen.neto.centavosATexto(), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = netoColor)
+                                Text(resumen.neto.centavosAtexto(), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = netoColor)
                             }
                         }
                     }
@@ -264,7 +266,7 @@ private fun GrupoPersonaCard(
     val netoPers   = grupo.totalFiado - grupo.totalCobrado
     val chipBg     = if (netoPers > 0) DebtRedBg  else OkGreenBg
     val chipFg     = if (netoPers > 0) DebtRed    else OkGreen
-    val chipTxt    = if (netoPers > 0) netoPers.centavosATexto() else "Al día"
+    val chipTxt    = if (netoPers > 0) netoPers.centavosAtexto() else "Al día"
 
     Surface(
         color  = MaterialTheme.colorScheme.surface,
@@ -354,7 +356,7 @@ private fun MovimientoFilaCompacta(
     onDelete: () -> Unit
 ) {
     val esPago     = mov.tipo == TipoMovimiento.PAGO
-    val montoTexto = if (esPago) "+${mov.monto.centavosATexto()}" else "−${mov.monto.centavosATexto()}"
+    val montoTexto = if (esPago) "+${mov.monto.centavosAtexto()}" else "−${mov.monto.centavosAtexto()}"
     val montoColor = if (esPago) OkGreen else DebtRed
     val iconBg     = if (esPago) OkGreenBg else Color(0xFFF9DEDC)
     val iconFg     = if (esPago) OkGreen   else Color(0xFF410E0B)
