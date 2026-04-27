@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.proyecto.cafetin.CafetinApp
-import com.proyecto.cafetin.data.ProductosCatalogo
+import com.proyecto.cafetin.data.catalog.ProductosCatalogo
 import com.proyecto.cafetin.data.model.Movimiento
 import com.proyecto.cafetin.data.model.Producto.ProductoRapido
 import com.proyecto.cafetin.data.model.Producto.CategoriaProductos
