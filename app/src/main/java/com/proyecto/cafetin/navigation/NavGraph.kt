@@ -15,7 +15,7 @@ fun NavGraph() {
     val navController = rememberNavController()
 
     NavHost(navController = navController, startDestination = Routes.PERSONAS) {
-        composable("personas") {
+        composable(Routes.PERSONAS) {
             PersonasScreen(
                 onPersonaClick   = { id -> navController.navigate(Routes.detalle(id))},
                 onHistorialClick = { navController.navigate(Routes.HISTORIAL) }
