@@ -44,11 +44,7 @@ import java.util.*
 fun HistorialScreen(onBack: () -> Unit) {
     val app = LocalContext.current.applicationContext as CafetinApp
     val vm: HistorialViewModel = viewModel(
-        factory = object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T =
-                HistorialViewModel(app.container.repository) as T
-        }
+        factory = HistorialViewModel.Factory(app.container.repository)
     )
 
     val diaActual  by vm.diaActual.collectAsState()

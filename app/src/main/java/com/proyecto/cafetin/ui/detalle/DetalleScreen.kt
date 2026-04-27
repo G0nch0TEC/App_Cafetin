@@ -1,6 +1,6 @@
 package com.proyecto.cafetin.ui.detalle
 
-import android.app.Application
+import android.content.Intent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -45,7 +45,6 @@ import com.proyecto.cafetin.util.MoneyUtils.centavosAtexto
 import com.proyecto.cafetin.util.NotaUtils.notaBase
 import java.text.SimpleDateFormat
 import java.util.*
-import kotlinx.coroutines.launch
 
 // ── Pantalla principal ────────────────────────────────────────────────────────
 @Composable
@@ -64,19 +63,36 @@ fun DetalleScreen(
     val desdeMs     by vm.desdeMs.collectAsState()
     val hastaMs     by vm.hastaMs.collectAsState()
 
-    var modalConfirm       by remember { mutableStateOf<Pair<String, Long>?>(null) }
+    var modalConfirm        by remember { mutableStateOf<Pair<String, Long>?>(null) }
     var mostrarModalParcial by remember { mutableStateOf(false) }
-    var mostrarModalManual by remember { mutableStateOf(false) }
+    var mostrarModalManual  by remember { mutableStateOf(false) }
     var mostrarDialogoEditar by remember { mutableStateOf(false) }
     var categoriaSeleccionada by remember { mutableStateOf<CategoriaProductos?>(null) }
 
     val snackHost  = remember { SnackbarHostState() }
-    val scope      = rememberCoroutineScope()
     @OptIn(ExperimentalMaterial3Api::class)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // ── Escucha mensajes de Snackbar ──────────────────────────────────────────
     LaunchedEffect(Unit) {
         vm.snackEvents.collect { msg -> snackHost.showSnackbar(msg) }
+    }
+
+    // ── Escucha eventos de la pantalla (compartir PDF, etc.) ──────────────────
+    LaunchedEffect(Unit) {
+        vm.eventos.collect { evento ->
+            when (evento) {
+                is DetalleEvent.CompartirPdf -> {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type     = "application/pdf"
+                        putExtra(Intent.EXTRA_STREAM, evento.uri)
+                        putExtra(Intent.EXTRA_SUBJECT, "Reporte de ${vm.persona.value?.nombre}")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Compartir reporte"))
+                }
+            }
+        }
     }
 
     Scaffold(
@@ -354,7 +370,7 @@ fun DetalleScreen(
         )
     }
 
-        // ── Modal confirmación pago ────────────────────────────────────────────
+    // ── Modal confirmación pago ────────────────────────────────────────────────
     modalConfirm?.let { (label, centavos) ->
         AlertDialog(
             onDismissRequest = { modalConfirm = null },
@@ -395,7 +411,7 @@ fun DetalleScreen(
             error      = exportState.error,
             onSetDesde = { vm.setDesde(it) },
             onSetHasta = { vm.setHasta(it) },
-            onExportar = { vm.exportarPdf(context) },
+            onExportar = { vm.exportarPdf() },   // ← ya no pasa context
             onDismiss  = { vm.cerrarDialogoExport() }
         )
     }
@@ -592,7 +608,6 @@ private fun MovimientoRow(
         // Botones −/+ solo para fiados de categoría (tienen prodOrigen)
         if (!esPago && prodOrigen != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                // Botón −
                 Surface(
                     shape    = CircleShape,
                     color    = Color(0xFFF0EBF8),
@@ -609,7 +624,6 @@ private fun MovimientoRow(
                     modifier = Modifier.widthIn(min = 54.dp), textAlign = TextAlign.Center
                 )
 
-                // Botón +
                 Surface(
                     shape    = CircleShape,
                     color    = Color(0xFFEDE7FF),

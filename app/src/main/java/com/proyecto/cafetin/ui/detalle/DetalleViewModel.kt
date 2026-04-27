@@ -1,7 +1,6 @@
 package com.proyecto.cafetin.ui.detalle
 
 import android.content.Context
-import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -22,6 +21,11 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+/** Eventos de UI que el ViewModel emite hacia la pantalla */
+sealed class DetalleEvent {
+    data class CompartirPdf(val uri: android.net.Uri) : DetalleEvent()
+}
+
 /** Estado del diálogo de exportación */
 data class ExportState(
     val mostrando: Boolean = false,
@@ -32,6 +36,7 @@ data class ExportState(
 class DetalleViewModel(
     private val repository: ICafetinRepository,
     val personaId: Int,
+    private val appContext: Context,
     private val acumularProductoUseCase: AcumularProductoUseCase = AcumularProductoUseCase(repository)
 ) : ViewModel() {
 
@@ -46,6 +51,9 @@ class DetalleViewModel(
 
     private val _snackEvents = Channel<String>(Channel.BUFFERED)
     val snackEvents = _snackEvents.receiveAsFlow()
+
+    private val _eventos = Channel<DetalleEvent>(Channel.BUFFERED)
+    val eventos = _eventos.receiveAsFlow()
 
     // ── Estado exportación PDF ────────────────────────────────────────────────
     private val _exportState = MutableStateFlow(ExportState())
@@ -157,7 +165,11 @@ class DetalleViewModel(
         _hastaMs.value = DateUtils.finDeDia(local)
     }
 
-    fun exportarPdf(context: Context) {
+    /**
+     * Genera el PDF y emite el Uri hacia la pantalla mediante [DetalleEvent.CompartirPdf].
+     * El ViewModel ya no conoce Intent ni startActivity — eso queda en la pantalla.
+     */
+    fun exportarPdf() {
         val persona = _persona.value ?: return
         _exportState.value = _exportState.value.copy(generando = true, error = null)
 
@@ -174,7 +186,7 @@ class DetalleViewModel(
             }
 
             val file = PdfExporter.generar(
-                context            = context,
+                context            = appContext,
                 nombrePersona      = persona.nombre,
                 descripcionPersona = persona.descripcion,
                 movimientos        = movs,
@@ -189,22 +201,15 @@ class DetalleViewModel(
                 return@launch
             }
 
-            // ── Marcar estado "Enviado" hasta el inicio del día siguiente ────
-            // El estado expira automáticamente: la UI compara enviadoHasta con
-            // el timestamp actual, así no hace falta ningún trabajo programado.
+            // Marcar estado "Enviado" hasta el fin del día actual
             val finDelDiaActual = finDeDia(System.currentTimeMillis())
             repository.marcarEnviado(personaId, finDelDiaActual)
 
             _exportState.value = ExportState(mostrando = false)
 
-            val uri = PdfExporter.uriParaCompartir(context, file)
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type     = "application/pdf"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_SUBJECT, "Reporte de ${persona.nombre}")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            context.startActivity(Intent.createChooser(intent, "Compartir reporte"))
+            // Emitir el Uri — la pantalla se encarga de lanzar el Intent
+            val uri = PdfExporter.uriParaCompartir(appContext, file)
+            _eventos.send(DetalleEvent.CompartirPdf(uri))
         }
     }
 
@@ -218,7 +223,7 @@ class DetalleViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             val repo = (app as CafetinApp).container.repository
-            return DetalleViewModel(repo, personaId) as T
+            return DetalleViewModel(repo, personaId, app.applicationContext) as T
         }
     }
 }

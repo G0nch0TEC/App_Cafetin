@@ -14,15 +14,15 @@ import com.proyecto.cafetin.ui.personas.PersonasScreen
 fun NavGraph() {
     val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = "personas") {
+    NavHost(navController = navController, startDestination = Routes.PERSONAS) {
         composable("personas") {
             PersonasScreen(
-                onPersonaClick   = { id -> navController.navigate("detalle/$id") },
-                onHistorialClick = { navController.navigate("historial") }
+                onPersonaClick   = { id -> navController.navigate(Routes.detalle(id))},
+                onHistorialClick = { navController.navigate(Routes.HISTORIAL) }
             )
         }
         composable(
-            route = "detalle/{personaId}",
+            route = Routes.DETALLE,
             arguments = listOf(navArgument("personaId") { type = NavType.IntType })
         ) { backStack ->
             val personaId = backStack.arguments!!.getInt("personaId")
@@ -31,7 +31,7 @@ fun NavGraph() {
                 onBack    = { navController.popBackStack() }
             )
         }
-        composable("historial") {
+        composable(Routes.HISTORIAL) {
             HistorialScreen(
                 onBack = { navController.popBackStack() }
             )

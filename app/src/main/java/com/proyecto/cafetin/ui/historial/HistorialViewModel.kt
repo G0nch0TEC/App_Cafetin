@@ -1,11 +1,13 @@
 package com.proyecto.cafetin.ui.historial
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.proyecto.cafetin.data.model.Movimiento
 import com.proyecto.cafetin.data.model.Persona
 import com.proyecto.cafetin.data.model.TipoMovimiento
 import com.proyecto.cafetin.repository.ICafetinRepository
+import com.proyecto.cafetin.util.DateUtils
 import com.proyecto.cafetin.util.DateUtils.inicioDeDiaHoy
 import com.proyecto.cafetin.util.fuzzyMatch
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -82,11 +84,11 @@ class HistorialViewModel(private val repository: ICafetinRepository) : ViewModel
     // ── Navegación ────────────────────────────────────────────────────────────
     // La búsqueda se mantiene al cambiar de día para no tener que reescribir el nombre
     fun diaAnterior() {
-        _diaActual.value = _diaActual.value - 24 * 60 * 60 * 1000L
+        _diaActual.value = _diaActual.value - DateUtils.UN_DIA_MS
     }
 
     fun diaSiguiente() {
-        val siguienteDia = _diaActual.value + 24 * 60 * 60 * 1000L
+        val siguienteDia = _diaActual.value + DateUtils.UN_DIA_MS
         if (siguienteDia <= inicioDeDiaHoy()) {
             _diaActual.value = siguienteDia
         }
@@ -99,4 +101,12 @@ class HistorialViewModel(private val repository: ICafetinRepository) : ViewModel
     fun eliminarMovimiento(movimiento: Movimiento) {
         viewModelScope.launch { repository.eliminarMovimiento(movimiento) }
     }
+
+    // ── Factory ───────────────────────────────────────────────────────────────
+    class Factory(private val repository: ICafetinRepository) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            HistorialViewModel(repository) as T
+    }
+
 }

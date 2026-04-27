@@ -49,8 +49,8 @@ object ProductosCatalogo {
         ),
         Producto.CategoriaProductos(
             "Galletas", "🍪", listOf(
-                Producto.ProductoRapido("Galleta", 100), Producto.ProductoRapido("Galleta", 200),
-                Producto.ProductoRapido("Galleta", 150), Producto.ProductoRapido("Cancun", 150),
+                Producto.ProductoRapido("Galleta chica", 100), Producto.ProductoRapido("Galleta grande", 200),
+                Producto.ProductoRapido("Galleta mediana", 150), Producto.ProductoRapido("Cancun", 150),
                 Producto.ProductoRapido("Chocman", 200),
             )
         ),

@@ -4,6 +4,7 @@ import com.proyecto.cafetin.data.db.AppDatabase
 import com.proyecto.cafetin.data.model.Movimiento
 import com.proyecto.cafetin.data.model.Persona
 import com.proyecto.cafetin.data.model.TipoMovimiento
+import com.proyecto.cafetin.util.DateUtils
 import com.proyecto.cafetin.util.DateUtils.inicioDeDia
 import kotlinx.coroutines.flow.Flow
 
@@ -41,7 +42,7 @@ class CafetinRepository(db: AppDatabase) : ICafetinRepository {
     /** Movimientos de cualquier día completo (pantalla Historial general) */
     override fun movimientosPorDia(fechaMs: Long): Flow<List<Movimiento>> {
         val desde = inicioDeDia(fechaMs)
-        val hasta = desde + 24 * 60 * 60 * 1000L
+        val hasta = desde + DateUtils.UN_DIA_MS
         return movimientoDao.getByRangoFecha(desde, hasta)
     }
 

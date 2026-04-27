@@ -4,6 +4,8 @@ import java.util.Calendar
 
 object DateUtils {
 
+    const val UN_DIA_MS = 24 * 60 * 60 * 1000L
+
     private fun baseCalendar(fechaMs: Long) = Calendar.getInstance().apply {
         timeInMillis = fechaMs
         set(Calendar.HOUR_OF_DAY, 0)
