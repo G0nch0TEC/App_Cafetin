@@ -14,8 +14,6 @@ App Android para gestionar fiados en una cafetería escolar. Reemplaza el cuader
 
 ## 📸 Capturas de pantalla
 
-> _Agrega tus capturas en la carpeta `/screenshots` y reemplaza esta sección._
-
 | Clientes | Detalle | Historial |
 |----------|---------|-----------|
 | ![Clientes](screenshots/personas.png) | ![Detalle](screenshots/detalle.png) | ![Historial](screenshots/historial.png) |
