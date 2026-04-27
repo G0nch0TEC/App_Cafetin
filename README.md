@@ -131,19 +131,3 @@ La base de datos está en versión `2`. Se incluye migración explícita `MIGRAT
 
 ---
 
-## 🗺️ Próximas mejoras
-
-- [ ] Backup automático en la nube (Firebase Firestore)
-- [ ] Autenticación con PIN o biometría
-- [ ] Gráficas de deuda mensual por cliente
-- [ ] Notificaciones de deudas antiguas
-- [ ] Registro de método de cobro (efectivo, Yape, Plin)
-- [ ] Gestión básica de inventario
-
----
-
-## 📄 Licencia
-
-```
-MIT License — puedes usar, modificar y distribuir este proyecto libremente.
-```
