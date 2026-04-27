@@ -127,7 +127,7 @@ La base de datos está en versión `2`. Se incluye migración explícita `MIGRAT
 2. **Prefijo por token** — `"rob"` → `"Roberto"` ✓
 3. **Subsecuencia ordenada** — `"mra"` → `"Maria"` ✓
 4. **Similitud por bigramas** (coeficiente Dice ≥ 40%) — `"juen"` → `"Juan"` ✓
-5. **Distancia de Levenshtein** con umbral adaptativo — `"robeto"` → `"Roberto"` ✓
+5. **Distancia de Levenshtein** con umbral adaptation — `"robeto"` → `"Roberto"` ✓
 
 ---
 
