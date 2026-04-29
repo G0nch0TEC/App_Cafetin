@@ -3,6 +3,7 @@ package com.proyecto.cafetin.util
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
 import androidx.core.content.FileProvider
 import com.proyecto.cafetin.data.model.Movimiento
@@ -11,24 +12,62 @@ import com.proyecto.cafetin.util.MoneyUtils.centavosAtexto
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.*
 
 object PdfExporter {
 
-    private const val PAGE_WIDTH  = 595   // A4 a 72 dpi
+    private const val PAGE_WIDTH  = 595
     private const val PAGE_HEIGHT = 842
-    private const val MARGIN      = 48f
+    private const val MARGIN      = 44f
+    private const val CONTENT_W   = PAGE_WIDTH - MARGIN * 2
 
-    private val sdfFecha  = SimpleDateFormat("d 'de' MMMM 'de' yyyy",  Locale("es"))
-    private val sdfHora   = SimpleDateFormat("h:mm a",                  Locale("es"))
-    private val sdfRango = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
-    private val sdfNombre = SimpleDateFormat("yyyyMMdd",                Locale("es"))
+    // ── Paleta Cafetín ────────────────────────────────────────────────────────
+    private val C_PRIMARY     = Color.rgb(103, 80, 164)   // violeta
+    private val C_PRIMARY_DK  = Color.rgb(72,  56, 115)   // violeta oscuro (header bg)
+    private val C_PRIMARY_LT  = Color.rgb(234, 228, 255)  // violeta muy claro
+    private val C_RED         = Color.rgb(163, 45,  45)
+    private val C_RED_LT      = Color.rgb(255, 235, 235)
+    private val C_GREEN       = Color.rgb(39,  110, 10)
+    private val C_GREEN_LT    = Color.rgb(230, 248, 225)
+    private val C_GRAY        = Color.rgb(110, 110, 120)
+    private val C_GRAY_LT     = Color.rgb(245, 244, 248)
+    private val C_LINE        = Color.rgb(218, 213, 230)
+    private val C_WHITE       = Color.WHITE
+    private val C_BLACK       = Color.rgb(25,  22,  35)
 
-    /**
-     * Genera el PDF y devuelve el File creado, o null si hubo error.
-     * El archivo se guarda en la carpeta privada de la app (no necesita permiso WRITE_EXTERNAL_STORAGE).
-     */
+    private val sdfFull   = SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("es"))
+    private val sdfShort  = SimpleDateFormat("dd/MM/yyyy",             Locale("es"))
+    private val sdfDia    = SimpleDateFormat("EEEE",                   Locale("es"))
+    private val sdfHora   = SimpleDateFormat("h:mm a",                 Locale("es"))
+    private val sdfNombre = SimpleDateFormat("yyyyMMdd",               Locale("es"))
+
+    // ── Helpers de Paint ──────────────────────────────────────────────────────
+    private fun paint(
+        color: Int     = C_BLACK,
+        size: Float    = 12f,
+        bold: Boolean  = false,
+        align: Paint.Align = Paint.Align.LEFT
+    ) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color         = color
+        this.textSize      = size
+        this.isFakeBoldText = bold
+        this.textAlign     = align
+    }
+
+    private fun linePaint(color: Int = C_LINE, width: Float = 1f) =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color       = color
+            this.strokeWidth = width
+            this.style       = Paint.Style.STROKE
+        }
+
+    private fun fillPaint(color: Int) =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color
+            this.style = Paint.Style.FILL
+        }
+
+    // ── API pública ───────────────────────────────────────────────────────────
     fun generar(
         context: Context,
         nombrePersona: String,
@@ -38,219 +77,377 @@ object PdfExporter {
         hasta: Long
     ): File? = runCatching {
 
-        val movOrdenados = movimientos.sortedBy { it.fecha }
+        val movOrdenados  = movimientos.sortedBy { it.fecha }
+        val totalFiado    = movimientos.filter { it.tipo == TipoMovimiento.FIADO }.sumOf { it.monto }
+        val totalCobrado  = movimientos.filter { it.tipo == TipoMovimiento.PAGO  }.sumOf { it.monto }
+        val pendiente     = totalFiado - totalCobrado
+        val totalPaginas  = estimarPaginas(movOrdenados.size)
 
-        val doc  = PdfDocument()
-        var pageNum    = 1
-        var pageInfo   = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNum).create()
-        var page       = doc.startPage(pageInfo)
-        var canvas     = page.canvas
-        var y          = MARGIN
+        val doc = PdfDocument()
+        var pageNum = 1
 
-        // ── Pinturas ────────────────────────────────────────────────────────
-        val pTitulo = Paint().apply {
-            color     = Color.rgb(103, 80, 164)   // CafetinPrimary
-            textSize  = 22f
-            isFakeBoldText = true
-            isAntiAlias    = true
-        }
-        val pSubtitulo = Paint().apply {
-            color    = Color.rgb(117, 117, 117)
-            textSize = 12f
-            isAntiAlias = true
-        }
-        val pSeccion = Paint().apply {
-            color    = Color.rgb(103, 80, 164)
-            textSize = 11f
-            isFakeBoldText = true
-            isAntiAlias    = true
-        }
-        val pNormal = Paint().apply {
-            color    = Color.BLACK
-            textSize = 12f
-            isAntiAlias = true
-        }
-        val pNota = Paint().apply {
-            color    = Color.rgb(60, 60, 60)
-            textSize = 12f
-            isAntiAlias = true
-        }
-        val pMontoPago = Paint().apply {
-            color    = Color.rgb(39, 80, 10)    // OkGreen
-            textSize = 12f
-            isFakeBoldText = true
-            isAntiAlias    = true
-        }
-        val pMontoFiado = Paint().apply {
-            color    = Color.rgb(163, 45, 45)   // DebtRed
-            textSize = 12f
-            isFakeBoldText = true
-            isAntiAlias    = true
-        }
-        val pLinea = Paint().apply {
-            color       = Color.rgb(202, 196, 208)
-            strokeWidth = 1f
-            isAntiAlias = true
-        }
-        val pTotal = Paint().apply {
-            color    = Color.BLACK
-            textSize = 13f
-            isFakeBoldText = true
-            isAntiAlias    = true
-        }
-        val pTotalMonto = Paint().apply {
-            color    = Color.rgb(163, 45, 45)
-            textSize = 13f
-            isFakeBoldText = true
-            isAntiAlias    = true
+        var pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNum).create()
+        var page     = doc.startPage(pageInfo)
+        var canvas   = page.canvas
+        var y        = 0f
+
+        // ── Nueva página ──────────────────────────────────────────────────────
+        fun nuevaPagina() {
+            // footer antes de cerrar
+            dibujarFooter(canvas, pageNum, totalPaginas, nombrePersona, desde, hasta)
+            doc.finishPage(page)
+            pageNum++
+            pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNum).create()
+            page   = doc.startPage(pageInfo)
+            canvas = page.canvas
+            y      = MARGIN + 8f
+            // mini-header en páginas siguientes
+            dibujarMiniHeader(canvas, nombrePersona)
+            y = 52f
         }
 
-        // ── Helper: nueva página si no cabe ─────────────────────────────────
-        fun checkPagina(alturaNeeded: Float) {
-            if (y + alturaNeeded > PAGE_HEIGHT - MARGIN) {
-                doc.finishPage(page)
-                pageNum++
-                pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNum).create()
-                page     = doc.startPage(pageInfo)
-                canvas   = page.canvas
-                y        = MARGIN
-            }
+        fun checkPagina(altura: Float) {
+            // reservar 48px para footer
+            if (y + altura > PAGE_HEIGHT - 48f) nuevaPagina()
         }
 
-        // ── Encabezado ───────────────────────────────────────────────────────
-        canvas.drawText("Cafetín", MARGIN, y, pTitulo)
-        y += 28f
-
-        canvas.drawText(
-            "Reporte generado el ${sdfFecha.format(Date())}",
-            MARGIN, y, pSubtitulo
+        // ═════════════════════════════════════════════════════════════════════
+        // PÁGINA 1 — HEADER PRINCIPAL
+        // ═════════════════════════════════════════════════════════════════════
+        y = dibujarHeaderPrincipal(
+            canvas, nombrePersona, descripcionPersona, desde, hasta
         )
-        y += 20f
 
-        // Línea separadora
-        canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, pLinea)
-        y += 20f
+        // ── Bloque resumen destacado ──────────────────────────────────────────
+        y = dibujarResumen(canvas, y, totalFiado, totalCobrado, pendiente)
 
-        // ── Datos de la persona ──────────────────────────────────────────────
-        canvas.drawText("CLIENTE", MARGIN, y, pSeccion)
-        y += 18f
-        canvas.drawText(nombrePersona, MARGIN, y, pNormal.apply { isFakeBoldText = true; textSize = 15f })
-        pNormal.apply { isFakeBoldText = false; textSize = 12f }
-        y += 18f
-        if (descripcionPersona.isNotBlank()) {
-            canvas.drawText(descripcionPersona, MARGIN, y, pSubtitulo)
-            y += 16f
-        }
+        // ── Cabecera de tabla ─────────────────────────────────────────────────
+        y = dibujarCabeceraTabla(canvas, y)
 
-        // Período
-        canvas.drawText(
-            "Período: ${sdfRango.format(Date(desde))} — ${sdfRango.format(Date(hasta))}",
-            MARGIN, y, pSubtitulo
-        )
-        y += 24f
+        // ═════════════════════════════════════════════════════════════════════
+        // FILAS DE MOVIMIENTOS agrupadas por día
+        // ═════════════════════════════════════════════════════════════════════
+        val porDia = movOrdenados.groupBy { sdfShort.format(Date(it.fecha)) }
 
-        canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, pLinea)
-        y += 20f
-
-        // ── Movimientos agrupados por día ────────────────────────────────────
         if (movOrdenados.isEmpty()) {
-            canvas.drawText("No hay movimientos en este período.", MARGIN, y, pSubtitulo)
-            y += 20f
+            checkPagina(30f)
+            canvas.drawText(
+                "No hay movimientos en este período.",
+                MARGIN, y + 16f,
+                paint(C_GRAY, 12f)
+            )
+            y += 30f
         } else {
-            // Agrupar por día
-            val porDia = movOrdenados.groupBy { mov ->
-                sdfFecha.format(Date(mov.fecha))
-            }
+            var filaAlterna = false
 
             for ((dia, movsDelDia) in porDia) {
-                checkPagina(40f)
+                // ── Separador de día ──────────────────────────────────────────
+                checkPagina(28f)
+                val bgDia = fillPaint(C_PRIMARY_LT)
+                canvas.drawRect(MARGIN, y, MARGIN + CONTENT_W, y + 22f, bgDia)
 
-                // Cabecera del día
-                canvas.drawText(dia.uppercase(), MARGIN, y, pSeccion)
-                y += 6f
-                canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, pLinea)
-                y += 14f
+                // Columna HORA: abreviatura del día + fecha corta (ej. "LUN 28/04/25")
+                val fechaDia  = movsDelDia.first().fecha
+                val nombreDia = sdfDia.format(Date(fechaDia)).take(3).uppercase(Locale("es"))
+                val diaCorto  = dia.let { it.substring(0,5) + "/" + it.substring(8) } // "28/04/25"
+                canvas.drawText(
+                    "$nombreDia $diaCorto",
+                    MARGIN + 6f, y + 15f,
+                    paint(C_PRIMARY, 9.5f, bold = true)
+                )
+
+                // Columna DESCRIPCIÓN: total fiado/cobrado del día (sin "S/" doble, centavosAtexto ya lo incluye)
+                val fiadoDelDia   = movsDelDia.filter { it.tipo == TipoMovimiento.FIADO }.sumOf { it.monto }
+                val cobradoDelDia = movsDelDia.filter { it.tipo == TipoMovimiento.PAGO  }.sumOf { it.monto }
+                val resumenDia = buildString {
+                    if (fiadoDelDia > 0)   append("Fiado: ${fiadoDelDia.centavosAtexto()}")
+                    if (fiadoDelDia > 0 && cobradoDelDia > 0) append("   ")
+                    if (cobradoDelDia > 0) append("Cobrado: ${cobradoDelDia.centavosAtexto()}")
+                }
+                canvas.drawText(
+                    resumenDia,
+                    MARGIN + 72f, y + 15f,
+                    paint(C_PRIMARY, 9f)
+                )
+
+                y += 22f
 
                 for (mov in movsDelDia) {
-                    checkPagina(22f)
+                    checkPagina(24f)
 
-                    val hora       = sdfHora.format(Date(mov.fecha))
-                    val nota       = mov.nota.ifBlank { if (mov.tipo == TipoMovimiento.PAGO) "Pago" else "Fiado" }
                     val esPago     = mov.tipo == TipoMovimiento.PAGO
-                    val montoTexto = if (esPago) "+${mov.monto.centavosAtexto()}" else "−${mov.monto.centavosAtexto()}"
-                    val pMonto     = if (esPago) pMontoPago else pMontoFiado
-                    val prefijo    = if (esPago) "↑" else "↓"
+                    val hora       = sdfHora.format(Date(mov.fecha))
+                    val nota       = mov.nota.ifBlank { if (esPago) "Pago" else "Fiado" }
+                    val montoStr   = mov.monto.centavosAtexto()
+                    val prefijo    = if (esPago) "+S/ " else "−S/ "
+                    val colorMonto = if (esPago) C_GREEN else C_RED
+                    val colorTipo  = if (esPago) C_GREEN else C_RED
+                    val bgTipo     = if (esPago) C_GREEN_LT else C_RED_LT
+                    val tipoStr    = if (esPago) "PAGO" else "FIADO"
 
-                    // Hora + prefijo
-                    canvas.drawText("$hora  $prefijo", MARGIN, y, pSubtitulo)
+                    // fondo alterno
+                    if (filaAlterna) {
+                        canvas.drawRect(MARGIN, y, MARGIN + CONTENT_W, y + 24f, fillPaint(C_GRAY_LT))
+                    }
+                    filaAlterna = !filaAlterna
 
-                    // Nota (concepto)
-                    canvas.drawText(nota, MARGIN + 100f, y, pNota)
+                    val yCentro = y + 16f
 
-                    // Monto alineado a la derecha
-                    val montoW = pMonto.measureText(montoTexto)
-                    canvas.drawText(montoTexto, PAGE_WIDTH - MARGIN - montoW, y, pMonto)
+                    // hora
+                    canvas.drawText(hora, MARGIN + 6f, yCentro, paint(C_GRAY, 10f))
 
-                    y += 20f
+                    // nota (descripción) — truncar si es muy larga
+                    val notaTrunc = if (nota.length > 32) nota.take(29) + "…" else nota
+                    canvas.drawText(notaTrunc, MARGIN + 72f, yCentro, paint(C_BLACK, 11f))
+
+                    // chip tipo
+                    val chipX = MARGIN + CONTENT_W - 180f
+                    val chipRect = RectF(chipX, y + 4f, chipX + 48f, y + 20f)
+                    canvas.drawRoundRect(chipRect, 6f, 6f, fillPaint(bgTipo))
+                    canvas.drawText(
+                        tipoStr,
+                        chipX + 24f, y + 15f,
+                        paint(colorTipo, 8f, bold = true, align = Paint.Align.CENTER)
+                    )
+
+                    // monto alineado derecha
+                    canvas.drawText(
+                        prefijo + montoStr,
+                        MARGIN + CONTENT_W - 4f, yCentro,
+                        paint(colorMonto, 11f, bold = true, align = Paint.Align.RIGHT)
+                    )
+
+                    y += 24f
                 }
-
-                // Subtotal del día
-                val fiadoDia   = movsDelDia.filter { it.tipo == TipoMovimiento.FIADO  }.sumOf { it.monto }
-                val cobradoDia = movsDelDia.filter { it.tipo == TipoMovimiento.PAGO   }.sumOf { it.monto }
-                checkPagina(20f)
-                val subtotalTxt = "Subtotal día: fiado ${fiadoDia.centavosAtexto()}  •  cobrado ${cobradoDia.centavosAtexto()}"
-                canvas.drawText(subtotalTxt, MARGIN, y, pSubtitulo)
-                y += 24f
             }
         }
 
-        // ── Totales finales ──────────────────────────────────────────────────
-        checkPagina(60f)
-        canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, pLinea)
-        y += 18f
+        // ═════════════════════════════════════════════════════════════════════
+        // TOTALES FINALES
+        // ═════════════════════════════════════════════════════════════════════
+        checkPagina(110f)
+        y += 10f
+        canvas.drawLine(MARGIN, y, MARGIN + CONTENT_W, y, linePaint(C_LINE, 1f))
+        y += 16f
 
-        val totalFiado   = movimientos.filter { it.tipo == TipoMovimiento.FIADO }.sumOf { it.monto }
-        val totalCobrado = movimientos.filter { it.tipo == TipoMovimiento.PAGO  }.sumOf { it.monto }
-        val pendiente    = totalFiado - totalCobrado
+        // Filas total fiado / cobrado
+        fun drawTotalRow(label: String, valor: String, colorValor: Int) {
+            canvas.drawText(label, MARGIN + CONTENT_W - 160f, y, paint(C_GRAY, 11f))
+            canvas.drawText(
+                valor, MARGIN + CONTENT_W, y,
+                paint(colorValor, 11f, bold = true, align = Paint.Align.RIGHT)
+            )
+            y += 18f
+        }
 
-        canvas.drawText("Total fiado:",   MARGIN, y, pTotal)
-        val fw = pTotalMonto.measureText(totalFiado.centavosAtexto())
-        canvas.drawText(totalFiado.centavosAtexto(), PAGE_WIDTH - MARGIN - fw, y, pMontoFiado)
-        y += 20f
+        drawTotalRow("Total fiado:",   totalFiado.centavosAtexto(),   C_RED)
+        drawTotalRow("Total cobrado:", totalCobrado.centavosAtexto(), C_GREEN)
 
-        canvas.drawText("Total cobrado:", MARGIN, y, pTotal)
-        val cw = pMontoPago.measureText(totalCobrado.centavosAtexto())
-        canvas.drawText(totalCobrado.centavosAtexto(), PAGE_WIDTH - MARGIN - cw, y, pMontoPago)
-        y += 20f
+        // ── Caja de saldo pendiente (protagonista) ────────────────────────────
+        y += 6f
+        val saldoPositivo = pendiente > 0L
+        val bgSaldo   = if (saldoPositivo) C_RED_LT   else C_GREEN_LT
+        val fgSaldo   = if (saldoPositivo) C_RED      else C_GREEN
+        val labelSaldo= if (saldoPositivo) "SALDO PENDIENTE" else "CUENTA AL DÍA ✓"
 
-        canvas.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, pLinea)
-        y += 18f
+        val cajaH = 54f
+        val cajaRect = RectF(MARGIN, y, MARGIN + CONTENT_W, y + cajaH)
+        canvas.drawRoundRect(cajaRect, 10f, 10f, fillPaint(bgSaldo))
+        canvas.drawRoundRect(cajaRect, 10f, 10f, linePaint(fgSaldo, 1.5f))
 
-        val pendientePaint = if (pendiente > 0) pTotalMonto else pMontoPago
-        val pendienteTxt   = if (pendiente > 0) "Saldo pendiente" else "Saldo saldado ✓"
-        canvas.drawText(pendienteTxt, MARGIN, y, pTotal)
-        val pw = pendientePaint.measureText(pendiente.centavosAtexto())
-        canvas.drawText(pendiente.centavosAtexto(), PAGE_WIDTH - MARGIN - pw, y, pendientePaint)
+        // barra lateral de acento
+        val accentRect = RectF(MARGIN, y, MARGIN + 5f, y + cajaH)
+        canvas.drawRoundRect(accentRect, 4f, 4f, fillPaint(fgSaldo))
 
+        canvas.drawText(
+            labelSaldo,
+            MARGIN + 16f, y + 22f,
+            paint(fgSaldo, 11f, bold = true)
+        )
+        canvas.drawText(
+            pendiente.centavosAtexto(),
+            MARGIN + CONTENT_W - 10f, y + 35f,
+            paint(fgSaldo, 22f, bold = true, align = Paint.Align.RIGHT)
+        )
+        y += cajaH + 16f
+
+        // ── Footer última página ──────────────────────────────────────────────
+        dibujarFooter(canvas, pageNum, totalPaginas, nombrePersona, desde, hasta)
         doc.finishPage(page)
 
-        // ── Guardar archivo ──────────────────────────────────────────────────
-        val nombreLimpio = nombrePersona.replace(" ", "_")
-        val fechaArchivo = sdfNombre.format(Date())
-        val dir = File(context.filesDir, "reportes").also { it.mkdirs() }
-        val file = File(dir, "Reporte_${nombreLimpio}_$fechaArchivo.pdf")
-
+        // ── Guardar ───────────────────────────────────────────────────────────
+        val nombreLimpio = nombrePersona.replace("\\s+".toRegex(), "_")
+        val dir  = File(context.filesDir, "reportes").also { it.mkdirs() }
+        val file = File(dir, "Reporte_${nombreLimpio}_${sdfNombre.format(Date())}.pdf")
         FileOutputStream(file).use { doc.writeTo(it) }
         doc.close()
 
         file
     }.getOrNull()
 
-    /** Devuelve un Uri compartible via FileProvider */
-    fun uriParaCompartir(context: Context, file: File) =
-        FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.provider",
-            file
+    // ── Header principal (solo página 1) ──────────────────────────────────────
+    private fun dibujarHeaderPrincipal(
+        canvas: android.graphics.Canvas,
+        nombre: String,
+        descripcion: String,
+        desde: Long,
+        hasta: Long
+    ): Float {
+        val headerH = if (descripcion.isNotBlank()) 108f else 92f
+
+        // Fondo violeta
+        canvas.drawRect(0f, 0f, PAGE_WIDTH.toFloat(), headerH, fillPaint(C_PRIMARY_DK))
+
+        // Línea de acento en la base del header
+        canvas.drawRect(0f, headerH, PAGE_WIDTH.toFloat(), headerH + 3f, fillPaint(C_PRIMARY))
+
+        // "Cafetín" — marca
+        canvas.drawText(
+            "Cafetín",
+            MARGIN, 32f,
+            paint(C_WHITE, 13f, bold = true)
         )
+
+        // Tipo de documento alineado a la derecha
+        canvas.drawText(
+            "REPORTE DE CUENTA",
+            PAGE_WIDTH - MARGIN, 32f,
+            paint(Color.argb(180, 255, 255, 255), 9f, align = Paint.Align.RIGHT)
+        )
+
+        // Nombre del cliente
+        canvas.drawText(
+            nombre,
+            MARGIN, 60f,
+            paint(C_WHITE, 20f, bold = true)
+        )
+
+        var yH = 78f
+        if (descripcion.isNotBlank()) {
+            canvas.drawText(
+                descripcion,
+                MARGIN, yH,
+                paint(Color.argb(200, 255, 255, 255), 11f)
+            )
+            yH += 16f
+        }
+
+        // Período y fecha generación
+        val periodo = "${sdfShort.format(Date(desde))}  →  ${sdfShort.format(Date(hasta))}"
+        canvas.drawText(
+            "Período: $periodo",
+            MARGIN, yH,
+            paint(Color.argb(200, 255, 255, 255), 10f)
+        )
+        canvas.drawText(
+            "Generado: ${sdfFull.format(Date())}",
+            PAGE_WIDTH - MARGIN, yH,
+            paint(Color.argb(160, 255, 255, 255), 9f, align = Paint.Align.RIGHT)
+        )
+
+        return headerH + 20f
+    }
+
+    // ── Mini-header para páginas 2+ ───────────────────────────────────────────
+    private fun dibujarMiniHeader(canvas: android.graphics.Canvas, nombre: String) {
+        canvas.drawRect(0f, 0f, PAGE_WIDTH.toFloat(), 32f, fillPaint(C_PRIMARY_DK))
+        canvas.drawRect(0f, 32f, PAGE_WIDTH.toFloat(), 34f, fillPaint(C_PRIMARY))
+        canvas.drawText("Cafetín", MARGIN, 22f, paint(C_WHITE, 10f, bold = true))
+        canvas.drawText(
+            "Reporte — $nombre",
+            PAGE_WIDTH - MARGIN, 22f,
+            paint(Color.argb(180, 255, 255, 255), 9f, align = Paint.Align.RIGHT)
+        )
+    }
+
+    // ── Bloque de resumen (3 fichas) ──────────────────────────────────────────
+    private fun dibujarResumen(
+        canvas: android.graphics.Canvas,
+        y: Float,
+        totalFiado: Long,
+        totalCobrado: Long,
+        pendiente: Long
+    ): Float {
+        val cardW = (CONTENT_W - 12f) / 3f
+        val cardH = 58f
+
+        data class Card(val label: String, val valor: String, val bg: Int, val fg: Int)
+
+        val cards = listOf(
+            Card("Total fiado",   totalFiado.centavosAtexto(),   C_RED_LT,   C_RED),
+            Card("Total cobrado", totalCobrado.centavosAtexto(), C_GREEN_LT, C_GREEN),
+            Card(
+                if (pendiente > 0) "Saldo pendiente" else "Cuenta al día",
+                pendiente.centavosAtexto(),
+                if (pendiente > 0) C_RED_LT else C_GREEN_LT,
+                if (pendiente > 0) C_RED    else C_GREEN
+            )
+        )
+
+        cards.forEachIndexed { i, card ->
+            val x = MARGIN + i * (cardW + 6f)
+            val rect = RectF(x, y, x + cardW, y + cardH)
+            canvas.drawRoundRect(rect, 8f, 8f, fillPaint(card.bg))
+            canvas.drawRoundRect(rect, 8f, 8f, linePaint(card.fg, 1f))
+
+            // barra superior de color
+            val topRect = RectF(x, y, x + cardW, y + 4f)
+            canvas.drawRoundRect(topRect, 4f, 4f, fillPaint(card.fg))
+
+            canvas.drawText(
+                card.label,
+                x + 8f, y + 20f,
+                paint(C_GRAY, 9f)
+            )
+            canvas.drawText(
+                card.valor,
+                x + 8f, y + 46f,
+                paint(card.fg, 14f, bold = true)
+            )
+        }
+
+        return y + cardH + 18f
+    }
+
+    // ── Cabecera de tabla ─────────────────────────────────────────────────────
+    private fun dibujarCabeceraTabla(canvas: android.graphics.Canvas, y: Float): Float {
+        canvas.drawRect(MARGIN, y, MARGIN + CONTENT_W, y + 22f, fillPaint(C_PRIMARY))
+        canvas.drawText("Hora",        MARGIN + 6f,                    y + 15f, paint(C_WHITE, 9f, bold = true))
+        canvas.drawText("Descripción", MARGIN + 72f,                   y + 15f, paint(C_WHITE, 9f, bold = true))
+        canvas.drawText("Tipo",        MARGIN + CONTENT_W - 168f,      y + 15f, paint(C_WHITE, 9f, bold = true))
+        canvas.drawText("Monto",       MARGIN + CONTENT_W - 4f,        y + 15f, paint(C_WHITE, 9f, bold = true, align = Paint.Align.RIGHT))
+        return y + 22f
+    }
+
+    // ── Footer ────────────────────────────────────────────────────────────────
+    private fun dibujarFooter(
+        canvas: android.graphics.Canvas,
+        pagina: Int,
+        total: Int,
+        nombre: String,
+        desde: Long,
+        hasta: Long
+    ) {
+        val yF = PAGE_HEIGHT - 28f
+        canvas.drawLine(MARGIN, yF - 6f, MARGIN + CONTENT_W, yF - 6f, linePaint(C_LINE))
+        canvas.drawText(
+            "Cafetín  •  $nombre  •  ${sdfShort.format(Date(desde))} – ${sdfShort.format(Date(hasta))}",
+            MARGIN, yF + 8f,
+            paint(C_GRAY, 8f)
+        )
+        canvas.drawText(
+            "Página $pagina de $total",
+            MARGIN + CONTENT_W, yF + 8f,
+            paint(C_GRAY, 8f, align = Paint.Align.RIGHT)
+        )
+    }
+
+    // Estimación simple de páginas para el footer
+    private fun estimarPaginas(totalMovimientos: Int): Int {
+        val filasPorPagina = 22
+        return maxOf(1, kotlin.math.ceil(totalMovimientos.toDouble() / filasPorPagina).toInt())
+    }
+
+    fun uriParaCompartir(context: Context, file: File) =
+        FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
 }

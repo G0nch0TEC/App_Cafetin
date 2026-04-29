@@ -48,6 +48,7 @@ class CafetinRepository(db: AppDatabase) : ICafetinRepository {
 
     override fun saldoPorPersona(personaId: Int): Flow<Long> = movimientoDao.getSaldoByPersona(personaId)
     override val saldoTotal: Flow<Long> = movimientoDao.getSaldoTotal()
+    override val totalAFavor: Flow<Long> = movimientoDao.getTotalAFavor()
 
     override fun cobradoHoy(): Flow<Long> =
         movimientoDao.getCobradoDesde(inicioDeDia(System.currentTimeMillis()))

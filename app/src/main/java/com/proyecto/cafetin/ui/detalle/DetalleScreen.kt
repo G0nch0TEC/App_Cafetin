@@ -41,6 +41,7 @@ import com.proyecto.cafetin.data.model.Producto.ProductoRapido
 import com.proyecto.cafetin.data.model.Producto.CategoriaProductos
 import com.proyecto.cafetin.data.model.TipoMovimiento
 import com.proyecto.cafetin.ui.theme.*
+import com.proyecto.cafetin.util.DateUtils
 import com.proyecto.cafetin.util.MoneyUtils.centavosAtexto
 import com.proyecto.cafetin.util.NotaUtils.notaBase
 import java.text.SimpleDateFormat
@@ -657,7 +658,8 @@ fun ExportarPdfDialog(
     var mostrarDesde by remember { mutableStateOf(false) }
     var mostrarHasta by remember { mutableStateOf(false) }
     val desdePickerState = rememberDatePickerState(initialSelectedDateMillis = desdeMs)
-    val hastaPickerState = rememberDatePickerState(initialSelectedDateMillis = hastaMs)
+    // hastaMs es medianoche del día SIGUIENTE (exclusive-end). Restamos un día para que el picker muestre el día real.
+    val hastaPickerState = rememberDatePickerState(initialSelectedDateMillis = hastaMs - DateUtils.UN_DIA_MS)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -669,7 +671,7 @@ fun ExportarPdfDialog(
                     Text("Desde: ${sdf.format(Date(desdeMs))}", fontSize = 14.sp)
                 }
                 OutlinedButton(onClick = { mostrarHasta = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Hasta: ${sdf.format(Date(hastaMs))}", fontSize = 14.sp)
+                    Text("Hasta: ${sdf.format(Date(hastaMs - DateUtils.UN_DIA_MS))}", fontSize = 14.sp)
                 }
                 if (error != null) Text(error, fontSize = 12.sp, color = DebtRed)
                 if (generando) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {

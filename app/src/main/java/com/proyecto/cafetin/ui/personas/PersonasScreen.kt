@@ -1,5 +1,8 @@
 package com.proyecto.cafetin.ui.personas
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,6 +11,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,8 +45,12 @@ import java.util.Date
 import java.util.Locale
 
 // Colores para el estado "Enviado"
-private val EnviadoBg  = Color(0xFFFFF3E0)   // naranja muy suave
-private val EnviadoFg  = Color(0xFFE65100)   // naranja oscuro legible
+private val EnviadoBg = Color(0xFFFFF3E0)
+private val EnviadoFg = Color(0xFFE65100)
+
+// Colores para el estado "A favor"
+private val AFavorBg = Color(0xFFE3F2FD)
+private val AFavorFg = Color(0xFF1565C0)
 
 @Composable
 fun PersonasScreen(
@@ -55,6 +63,7 @@ fun PersonasScreen(
     val personas         by vm.personas.collectAsState()
     val saldoTotal       by vm.saldoTotal.collectAsState()
     val cobradoHoy       by vm.cobradoHoy.collectAsState()
+    val totalAFavor      by vm.totalAFavor.collectAsState()
     val saldosPorPersona by vm.saldosPorPersona.collectAsState()
     val busqueda         by vm.busqueda.collectAsState()
     val orden            by vm.orden.collectAsState()
@@ -62,6 +71,15 @@ fun PersonasScreen(
     var mostrarDialogo   by remember { mutableStateOf(false) }
     var personaAEliminar by remember { mutableStateOf<Persona?>(null) }
     var mostrarOrden     by remember { mutableStateOf(false) }
+
+    val listState = rememberLazyListState()
+
+    // FAB visible cuando estás arriba del todo o cuando no hay scroll activo
+    val mostrarFab by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex == 0 || !listState.isScrollInProgress
+        }
+    }
 
     val ahora = System.currentTimeMillis()
 
@@ -74,13 +92,13 @@ fun PersonasScreen(
             .filter { p ->
                 val nombreOk = fuzzyMatch(p.nombre, busqueda)
                 val saldo = saldosPorPersona[p.id] ?: 0L
-                // El estado Enviado es válido si enviadoHasta > timestamp actual
                 val estaEnviado = p.enviadoHasta > ahora
                 val estadoOk = when (filtro) {
                     FiltroPersonas.TODOS     -> true
                     FiltroPersonas.CON_DEUDA -> saldo > 0
-                    FiltroPersonas.AL_DIA    -> saldo <= 0
+                    FiltroPersonas.AL_DIA    -> saldo == 0L
                     FiltroPersonas.ENVIADO   -> estaEnviado
+                    FiltroPersonas.A_FAVOR   -> saldo < 0
                 }
                 nombreOk && estadoOk
             }
@@ -96,13 +114,19 @@ fun PersonasScreen(
     Scaffold(
         containerColor = Color(0xFFF4F2F8),
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick        = { mostrarDialogo = true },
-                icon           = { Icon(Icons.Default.Add, contentDescription = null) },
-                text           = { Text("Nueva persona") },
-                containerColor = PrimaryContainer,
-                contentColor   = OnPrimaryContainer
-            )
+            AnimatedVisibility(
+                visible = mostrarFab,
+                enter   = slideInVertically(initialOffsetY = { it * 2 }),
+                exit    = slideOutVertically(targetOffsetY = { it * 2 })
+            ) {
+                ExtendedFloatingActionButton(
+                    onClick        = { mostrarDialogo = true },
+                    icon           = { Icon(Icons.Default.Add, contentDescription = null) },
+                    text           = { Text("Nueva persona") },
+                    containerColor = PrimaryContainer,
+                    contentColor   = OnPrimaryContainer
+                )
+            }
         }
     ) { padding ->
         Column(
@@ -137,12 +161,13 @@ fun PersonasScreen(
             Surface(color = MaterialTheme.colorScheme.surface) {
                 Row(
                     Modifier
-                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    StatCard("Pendiente total", saldoTotal.centavosAtexto(), DebtRed, Modifier.weight(1f))
-                    StatCard("Cobrado hoy",     cobradoHoy.centavosAtexto(), OkGreen, Modifier.weight(1f))
+                    StatCard("Pendiente", saldoTotal.centavosAtexto(), DebtRed, Modifier.width(160.dp))
+                    StatCard("A favor", totalAFavor.centavosAtexto(), AFavorFg, Modifier.width(160.dp))
+                    StatCard("Cobrado hoy", cobradoHoy.centavosAtexto(), OkGreen, Modifier.width(160.dp))
                 }
             }
 
@@ -186,8 +211,8 @@ fun PersonasScreen(
                         // Botón ordenar
                         Box {
                             Surface(
-                                shape  = RoundedCornerShape(28.dp),
-                                color  = if (orden != OrdenPersonas.NOMBRE) PrimaryContainer else SurfaceGray,
+                                shape    = RoundedCornerShape(28.dp),
+                                color    = if (orden != OrdenPersonas.NOMBRE) PrimaryContainer else SurfaceGray,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(28.dp))
                                     .clickable { mostrarOrden = true }
@@ -199,30 +224,30 @@ fun PersonasScreen(
                                 ) {
                                     Text(
                                         "Ordenar",
-                                        fontSize = 12.sp,
+                                        fontSize   = 12.sp,
                                         fontWeight = FontWeight.Medium,
-                                        color = if (orden != OrdenPersonas.NOMBRE) OnPrimaryContainer else TextGray
+                                        color      = if (orden != OrdenPersonas.NOMBRE) OnPrimaryContainer else TextGray
                                     )
                                     Icon(
                                         Icons.Default.KeyboardArrowDown,
                                         contentDescription = null,
                                         modifier = Modifier.size(14.dp),
-                                        tint = if (orden != OrdenPersonas.NOMBRE) OnPrimaryContainer else TextGray
+                                        tint     = if (orden != OrdenPersonas.NOMBRE) OnPrimaryContainer else TextGray
                                     )
                                 }
                             }
                             DropdownMenu(
-                                expanded        = mostrarOrden,
+                                expanded         = mostrarOrden,
                                 onDismissRequest = { mostrarOrden = false }
                             ) {
-                                OrdenOpcion("Nombre A–Z",       OrdenPersonas.NOMBRE,         orden) { vm.setOrden(it); mostrarOrden = false }
-                                OrdenOpcion("Mayor deuda",      OrdenPersonas.MAYOR_DEUDA,    orden) { vm.setOrden(it); mostrarOrden = false }
-                                OrdenOpcion("Al día primero",   OrdenPersonas.AL_DIA_PRIMERO, orden) { vm.setOrden(it); mostrarOrden = false }
+                                OrdenOpcion("Nombre A–Z",     OrdenPersonas.NOMBRE,         orden) { vm.setOrden(it); mostrarOrden = false }
+                                OrdenOpcion("Mayor deuda",    OrdenPersonas.MAYOR_DEUDA,    orden) { vm.setOrden(it); mostrarOrden = false }
+                                OrdenOpcion("Al día primero", OrdenPersonas.AL_DIA_PRIMERO, orden) { vm.setOrden(it); mostrarOrden = false }
                             }
                         }
                     }
 
-                    // Chips de filtro — incluye "Enviado"
+                    // Chips de filtro
                     Row(
                         Modifier
                             .horizontalScroll(rememberScrollState())
@@ -232,8 +257,22 @@ fun PersonasScreen(
                         FiltroChip("Todos",     FiltroPersonas.TODOS,     filtro) { vm.setFiltro(it) }
                         FiltroChip("Con deuda", FiltroPersonas.CON_DEUDA, filtro) { vm.setFiltro(it) }
                         FiltroChip("Al día",    FiltroPersonas.AL_DIA,    filtro) { vm.setFiltro(it) }
-                        // Chip especial con color naranja para "Enviado"
-                        FiltroChipEnviado(filtro) { vm.setFiltro(it) }
+                        FiltroChipColoreado(
+                            label      = "A favor",
+                            valor      = FiltroPersonas.A_FAVOR,
+                            seleccionado = filtro,
+                            activoBg   = AFavorFg,
+                            inactivoFg = AFavorFg,
+                            onClick    = { vm.setFiltro(it) }
+                        )
+                        FiltroChipColoreado(
+                            label      = "Enviado",
+                            valor      = FiltroPersonas.ENVIADO,
+                            seleccionado = filtro,
+                            activoBg   = EnviadoFg,
+                            inactivoFg = EnviadoFg,
+                            onClick    = { vm.setFiltro(it) }
+                        )
                     }
 
                     Spacer(Modifier.height(4.dp))
@@ -250,13 +289,16 @@ fun PersonasScreen(
                         else -> "${personasFiltradas.size} persona${if (personasFiltradas.size != 1) "s" else ""}"
                     },
                     fontSize = 11.sp,
-                    color = TextGray,
+                    color    = TextGray,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                 )
             }
 
             // Lista
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state    = listState,
+                modifier = Modifier.fillMaxSize()
+            ) {
                 if (personasFiltradas.isEmpty()) {
                     item {
                         Box(
@@ -268,16 +310,17 @@ fun PersonasScreen(
                                     FiltroPersonas.CON_DEUDA -> "Nadie debe nada por ahora ✓"
                                     FiltroPersonas.AL_DIA    -> "Todos tienen deuda pendiente"
                                     FiltroPersonas.ENVIADO   -> "Ningún reporte enviado hoy aún"
+                                    FiltroPersonas.A_FAVOR   -> "Nadie tiene saldo a favor"
                                     else                     -> "No se encontró \"$busqueda\""
                                 },
                                 fontSize = 14.sp,
-                                color = TextGray
+                                color    = TextGray
                             )
                         }
                     }
                 }
                 items(personasFiltradas, key = { it.id }) { persona ->
-                    val saldo = saldosPorPersona[persona.id] ?: 0L
+                    val saldo       = saldosPorPersona[persona.id] ?: 0L
                     val estaEnviado = persona.enviadoHasta > ahora
                     PersonaRow(
                         persona     = persona,
@@ -314,7 +357,7 @@ fun PersonasScreen(
     }
 }
 
-// ── Chips y opciones de filtro/orden ─────────────────────────────────────────
+// ── Chips de filtro ───────────────────────────────────────────────────────────
 
 @Composable
 private fun FiltroChip(
@@ -341,32 +384,36 @@ private fun FiltroChip(
                     Icons.Default.Check,
                     contentDescription = null,
                     modifier = Modifier.size(13.dp),
-                    tint = Color.White
+                    tint     = Color.White
                 )
             }
             Text(
                 label,
-                fontSize = 12.sp,
+                fontSize   = 12.sp,
                 fontWeight = if (activo) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (activo) Color.White else TextGray
+                color      = if (activo) Color.White else TextGray
             )
         }
     }
 }
 
-/** Chip especial para "Enviado" con color naranja propio */
+/** Chip con color propio (para "A favor" y "Enviado") */
 @Composable
-private fun FiltroChipEnviado(
+private fun FiltroChipColoreado(
+    label: String,
+    valor: FiltroPersonas,
     seleccionado: FiltroPersonas,
+    activoBg: Color,
+    inactivoFg: Color,
     onClick: (FiltroPersonas) -> Unit
 ) {
-    val activo = seleccionado == FiltroPersonas.ENVIADO
+    val activo = seleccionado == valor
     Surface(
         shape    = RoundedCornerShape(100.dp),
-        color    = if (activo) EnviadoFg else SurfaceGray,
+        color    = if (activo) activoBg else SurfaceGray,
         modifier = Modifier
             .clip(RoundedCornerShape(100.dp))
-            .clickable { onClick(FiltroPersonas.ENVIADO) }
+            .clickable { onClick(valor) }
     ) {
         Row(
             Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
@@ -378,14 +425,14 @@ private fun FiltroChipEnviado(
                     Icons.Default.Check,
                     contentDescription = null,
                     modifier = Modifier.size(13.dp),
-                    tint = Color.White
+                    tint     = Color.White
                 )
             }
             Text(
-                "Enviado",
-                fontSize = 12.sp,
+                label,
+                fontSize   = 12.sp,
                 fontWeight = if (activo) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (activo) Color.White else EnviadoFg
+                color      = if (activo) Color.White else inactivoFg
             )
         }
     }
@@ -401,7 +448,7 @@ private fun OrdenOpcion(
     DropdownMenuItem(
         text = {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment     = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(label, fontSize = 13.sp)
@@ -414,7 +461,7 @@ private fun OrdenOpcion(
     )
 }
 
-// ── Composables existentes ────────────────────────────────────────────────────
+// ── Composables reutilizables ─────────────────────────────────────────────────
 
 @Composable
 private fun StatCard(label: String, value: String, valueColor: Color, modifier: Modifier = Modifier) {
@@ -449,7 +496,7 @@ fun PersonaRow(
                 onLongClick = onDelete
             )
             .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
-        verticalAlignment    = Alignment.CenterVertically,
+        verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
@@ -468,7 +515,7 @@ fun PersonaRow(
                 Text(persona.descripcion, fontSize = 12.sp, color = TextGray, modifier = Modifier.padding(top = 1.dp))
         }
 
-        // Badge "Enviado" — aparece a la izquierda del chip de deuda
+        // Badge "Enviado"
         if (estaEnviado) {
             Box(
                 Modifier
@@ -478,14 +525,14 @@ fun PersonaRow(
             ) {
                 Text(
                     "Enviado",
-                    fontSize = 11.sp,
+                    fontSize   = 11.sp,
                     fontWeight = FontWeight.Medium,
-                    color = EnviadoFg
+                    color      = EnviadoFg
                 )
             }
         }
 
-        // Chip de deuda / al día / adelanto
+        // Chip de deuda / al día / a favor
         when {
             saldo > 0 -> Box(
                 Modifier
@@ -493,12 +540,14 @@ fun PersonaRow(
                     .background(DebtRedBg)
                     .padding(horizontal = 10.dp, vertical = 4.dp)
             ) { Text(saldo.centavosAtexto(), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = DebtRed) }
+
             saldo < 0 -> Box(
                 Modifier
                     .clip(RoundedCornerShape(100.dp))
-                    .background(Color(0xFFE3F2FD))
+                    .background(AFavorBg)
                     .padding(horizontal = 10.dp, vertical = 4.dp)
-            ) { Text("A favor ${(-saldo).centavosAtexto()}", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1565C0)) }
+            ) { Text("A favor ${(-saldo).centavosAtexto()}", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = AFavorFg) }
+
             else -> Box(
                 Modifier
                     .clip(RoundedCornerShape(100.dp))
@@ -517,30 +566,30 @@ private fun AgregarPersonaDialog(onDismiss: () -> Unit, onConfirm: (String, Stri
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Nueva persona") },
-        text = {
+        text  = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
-                    value         = nombre,
-                    onValueChange = { nombre = it },
-                    label         = { Text("Nombre") },
-                    singleLine    = true,
+                    value           = nombre,
+                    onValueChange   = { nombre = it },
+                    label           = { Text("Nombre") },
+                    singleLine      = true,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
-                    modifier      = Modifier.fillMaxWidth()
+                    modifier        = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
-                    value         = descripcion,
-                    onValueChange = { descripcion = it },
-                    label         = { Text("Descripción (opcional)") },
-                    singleLine    = true,
+                    value           = descripcion,
+                    onValueChange   = { descripcion = it },
+                    label           = { Text("Descripción (opcional)") },
+                    singleLine      = true,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                    modifier      = Modifier.fillMaxWidth()
+                    modifier        = Modifier.fillMaxWidth()
                 )
             }
         },
         confirmButton = {
             Button(
-                onClick  = { if (nombre.isNotBlank()) onConfirm(nombre, descripcion) },
-                enabled  = nombre.isNotBlank()
+                onClick = { if (nombre.isNotBlank()) onConfirm(nombre, descripcion) },
+                enabled = nombre.isNotBlank()
             ) { Text("Agregar") }
         },
         dismissButton = {

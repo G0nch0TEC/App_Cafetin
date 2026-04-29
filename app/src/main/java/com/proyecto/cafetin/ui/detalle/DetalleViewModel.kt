@@ -10,6 +10,7 @@ import com.proyecto.cafetin.data.model.Persona
 import com.proyecto.cafetin.domain.usecase.AcumularProductoUseCase
 import com.proyecto.cafetin.repository.ICafetinRepository
 import com.proyecto.cafetin.util.DateUtils
+import com.proyecto.cafetin.util.DateUtils.desdeDatePicker
 import com.proyecto.cafetin.util.DateUtils.finDeDia
 import com.proyecto.cafetin.util.DateUtils.finDeDiaHoy
 import com.proyecto.cafetin.util.DateUtils.inicioDeDiaHoy
@@ -154,15 +155,13 @@ class DetalleViewModel(
     }
 
     fun setDesde(ms: Long) {
-        // El DatePicker devuelve medianoche UTC; corregimos a medianoche local
-        val local = DateUtils.inicioDeDia(ms + java.util.TimeZone.getDefault().getOffset(ms))
+        val local = desdeDatePicker(ms)
         _desdeMs.value = local
-        if (local > _hastaMs.value) _hastaMs.value = DateUtils.finDeDia(local)
+        if (local > _hastaMs.value) _hastaMs.value = finDeDia(local)
     }
 
     fun setHasta(ms: Long) {
-        val local = DateUtils.inicioDeDia(ms + java.util.TimeZone.getDefault().getOffset(ms))
-        _hastaMs.value = DateUtils.finDeDia(local)
+        _hastaMs.value = finDeDia(desdeDatePicker(ms))
     }
 
     /**

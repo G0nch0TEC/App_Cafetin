@@ -38,10 +38,30 @@ interface MovimientoDao {
     fun getSaldoByPersona(personaId: Int): Flow<Long>
 
     @Query("""
-        SELECT COALESCE(SUM(CASE WHEN tipo = 'FIADO' THEN monto ELSE -monto END), 0)
-        FROM movimientos
+        SELECT COALESCE(SUM(saldo), 0)
+        FROM (
+            SELECT SUM(CASE WHEN tipo = 'FIADO' THEN monto ELSE -monto END) AS saldo
+            FROM movimientos
+            GROUP BY personaId
+            HAVING saldo > 0
+        )
     """)
     fun getSaldoTotal(): Flow<Long>
+
+    /**
+     * Suma los saldos negativos (adelantos/pagos en exceso).
+     * Devuelve valor positivo: ej. si alguien pagó 50 de más, retorna 50.
+     */
+    @Query("""
+        SELECT COALESCE(-SUM(saldo), 0)
+        FROM (
+            SELECT SUM(CASE WHEN tipo = 'FIADO' THEN monto ELSE -monto END) AS saldo
+            FROM movimientos
+            GROUP BY personaId
+            HAVING saldo < 0
+        )
+    """)
+    fun getTotalAFavor(): Flow<Long>
 
     @Query("""
         SELECT COALESCE(SUM(monto), 0) FROM movimientos

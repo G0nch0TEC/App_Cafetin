@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 interface ICafetinRepository {
         val personas: Flow<List<Persona>>
         val saldoTotal: Flow<Long>
+        val totalAFavor: Flow<Long>
         suspend fun insertPersona(persona: Persona)
         suspend fun updatePersona(persona: Persona)
         suspend fun deletePersona(persona: Persona)

@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 enum class OrdenPersonas { NOMBRE, MAYOR_DEUDA, AL_DIA_PRIMERO }
-enum class FiltroPersonas { TODOS, CON_DEUDA, AL_DIA, ENVIADO }
+enum class FiltroPersonas { TODOS, CON_DEUDA, AL_DIA, ENVIADO, A_FAVOR }
 
 class PersonasViewModel(private val repository: ICafetinRepository) : ViewModel() {
 
@@ -25,6 +25,9 @@ class PersonasViewModel(private val repository: ICafetinRepository) : ViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
     val cobradoHoy: StateFlow<Long> = repository.cobradoHoy()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
+
+    val totalAFavor: StateFlow<Long> = repository.totalAFavor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
     private val _saldosPorPersona = MutableStateFlow<Map<Int, Long>>(emptyMap())
