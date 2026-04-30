@@ -14,7 +14,7 @@ App Android para gestionar fiados en una cafetería escolar. Reemplaza el cuader
 
 ## 📸 Capturas de pantalla
 
-| Clientes | Detalle | Historial | catalogo |
+| Clientes | Detalle | Historial | Catálogo |
 |----------|---------|-----------|----------|
 |![Clientes](screenshots/personas.png) |![Detalle](screenshots/detalle.png) |![Historial](screenshots/historial.png) |![Catalogo](screenshots/catalogo.png) |
 
@@ -29,6 +29,7 @@ App Android para gestionar fiados en una cafetería escolar. Reemplaza el cuader
 - **Historial por día** — navega día a día para ver todos los movimientos
 - **Exportar PDF** — reporte detallado por cliente y rango de fechas
 - **Compartir por WhatsApp** u otras apps directamente desde la app
+- **Catálogo editable** — administra categorías y productos directamente desde la app, sin tocar el código
 - **100% offline** — no requiere internet, los datos viven en el dispositivo
 
 ---
@@ -55,15 +56,17 @@ El proyecto sigue una arquitectura en capas inspirada en Clean Architecture:
 ```
 com.proyecto.cafetin/
 ├── data/
-│   ├── catalog/        # Catálogo de productos (en memoria)
-│   ├── db/             # Room: AppDatabase, DAOs, Converters
-│   └── model/          # Entidades: Persona, Movimiento, Producto
+│   ├── catalog/        # Catálogo estático de productos (seed inicial)
+│   ├── db/             # Room: AppDatabase, DAOs, Converters, Migrations
+│   └── model/          # Entidades: Persona, Movimiento, Producto,
+│                       #            CatalogoCategoria, CatalogoProducto
 ├── di/                 # Inyección de dependencias manual (AppContainer)
 ├── domain/
-│   └── usecase/        # AcumularProductoUseCase
+│   └── usecase/        # AcumularProductoUseCase, ExportarPdfUseCase
 ├── navigation/         # NavGraph + Routes (constantes de rutas)
-├── repository/         # ICafetinRepository + CafetinRepository
+├── repository/         # ICafetinRepository + ICatalogoRepository + CafetinRepository
 ├── ui/
+│   ├── catalogo/       # Pantalla de administración del catálogo (nueva)
 │   ├── detalle/        # Pantalla de detalle por cliente
 │   ├── historial/      # Pantalla de historial diario
 │   ├── personas/       # Pantalla principal (lista de clientes)
@@ -108,12 +111,35 @@ No se requiere ninguna API key ni configuración adicional. La app funciona comp
 
 ## 🗄️ Base de datos
 
-La app usa **Room** con dos entidades principales:
+La app usa **Room** con cuatro entidades:
 
 - `Persona` — cliente registrado (nombre, descripción, estado de envío)
 - `Movimiento` — fiado o pago asociado a una persona (monto, nota, fecha, tipo)
+- `CatalogoCategoria` — categoría editable del catálogo (nombre, emoji, orden)
+- `CatalogoProducto` — producto editable dentro de una categoría (nombre, precio en centavos, orden)
 
-La base de datos está en versión `2`. Se incluye migración explícita `MIGRATION_1_2` para preservar los datos de usuarios existentes al actualizar la app.
+La base de datos está en versión `3`. Se incluyen migraciones explícitas para preservar los datos al actualizar:
+
+| Migración | Cambio |
+|-----------|--------|
+| `MIGRATION_1_2` | Agrega columna `enviadoHasta` a la tabla `personas` |
+| `MIGRATION_2_3` | Crea las tablas `catalogo_categorias` y `catalogo_productos`, y las pre-puebla con el catálogo estático que antes estaba hardcodeado en `ProductosCatalogo` |
+
+---
+
+## 📦 Catálogo editable
+
+Antes de esta versión, el catálogo de productos era un objeto Kotlin estático (`ProductosCatalogo`). Ahora el catálogo vive en Room y se puede administrar desde la propia app.
+
+**Qué puede hacer el usuario desde la pantalla de catálogo:**
+
+- Crear, renombrar y eliminar **categorías** (con emoji personalizable)
+- Agregar, editar y eliminar **productos** dentro de cada categoría
+- Ver los cambios reflejados de inmediato en la pantalla de detalle al registrar fiados
+
+**Acceso:** pantalla Detalle → botón *Gestionar catálogo* → `CatalogoScreen`
+
+La migración `2→3` carga automáticamente el catálogo estático existente como datos iniciales, por lo que los usuarios que actualicen la app no pierden ningún producto.
 
 ---
 
@@ -125,7 +151,6 @@ La base de datos está en versión `2`. Se incluye migración explícita `MIGRAT
 2. **Prefijo por token** — `"rob"` → `"Roberto"` ✓
 3. **Subsecuencia ordenada** — `"mra"` → `"Maria"` ✓
 4. **Similitud por bigramas** (coeficiente Dice ≥ 40%) — `"juen"` → `"Juan"` ✓
-5. **Distancia de Levenshtein** con umbral adaptation — `"robeto"` → `"Roberto"` ✓
+5. **Distancia de Levenshtein** con umbral adaptativo — `"robeto"` → `"Roberto"` ✓
 
 ---
-
