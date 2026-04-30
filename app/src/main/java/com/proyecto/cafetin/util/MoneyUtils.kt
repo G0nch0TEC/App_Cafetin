@@ -16,4 +16,7 @@ object MoneyUtils {
             append("%02d".format(valor % 100))
         }
     }
+
+    /** Formatea un precio positivo en centavos como "S/X.XX". */
+    fun Long.toPrecioTexto(): String = "S/${this / 100}.${"%02d".format(this % 100)}"
 }

@@ -5,11 +5,15 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.proyecto.cafetin.data.model.Persona
 import com.proyecto.cafetin.repository.ICafetinRepository
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -30,8 +34,15 @@ class PersonasViewModel(private val repository: ICafetinRepository) : ViewModel(
     val totalAFavor: StateFlow<Long> = repository.totalAFavor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
-    private val _saldosPorPersona = MutableStateFlow<Map<Int, Long>>(emptyMap())
-    val saldosPorPersona: StateFlow<Map<Int, Long>> = _saldosPorPersona.asStateFlow()
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val saldosPorPersona: StateFlow<Map<Int, Long>> = repository.personas
+        .flatMapLatest { lista ->
+            if (lista.isEmpty()) flowOf(emptyMap())
+            else combine(
+                lista.map { p -> repository.saldoPorPersona(p.id).map { p.id to it } }
+            ) { pares -> pares.toMap() }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     private val _busqueda = MutableStateFlow("")
     val busqueda: StateFlow<String> = _busqueda.asStateFlow()
@@ -41,33 +52,6 @@ class PersonasViewModel(private val repository: ICafetinRepository) : ViewModel(
 
     private val _filtro = MutableStateFlow(FiltroPersonas.TODOS)
     val filtro: StateFlow<FiltroPersonas> = _filtro.asStateFlow()
-
-    // Mapa de Jobs activos por personaId — evita collectors duplicados y memory leaks
-    private val saldoJobs = mutableMapOf<Int, Job>()
-
-    init {
-        viewModelScope.launch {
-            personas.collect { lista ->
-                val idsActuales = lista.map { it.id }.toSet()
-
-                // Cancelar jobs de personas ya eliminadas
-                val idsAEliminar = saldoJobs.keys.filter { it !in idsActuales }
-                idsAEliminar.forEach { id ->
-                    saldoJobs.remove(id)?.cancel()
-                    _saldosPorPersona.value = _saldosPorPersona.value - id
-                }
-
-                // Iniciar collector solo para personas nuevas (sin job activo)
-                lista.filter { it.id !in saldoJobs }.forEach { persona ->
-                    saldoJobs[persona.id] = launch {
-                        repository.saldoPorPersona(persona.id).collect { saldo ->
-                            _saldosPorPersona.value = _saldosPorPersona.value + (persona.id to saldo)
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     fun setBusqueda(q: String) { _busqueda.value = q }
     fun setOrden(o: OrdenPersonas) { _orden.value = o }

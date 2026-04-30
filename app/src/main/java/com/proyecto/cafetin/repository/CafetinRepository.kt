@@ -1,8 +1,7 @@
 package com.proyecto.cafetin.repository
 
 import com.proyecto.cafetin.data.db.AppDatabase
-import com.proyecto.cafetin.data.model.Movimiento
-import com.proyecto.cafetin.data.model.Persona
+import com.proyecto.cafetin.data.model.*
 import com.proyecto.cafetin.data.model.TipoMovimiento
 import com.proyecto.cafetin.util.DateUtils
 import com.proyecto.cafetin.util.DateUtils.inicioDeDia
@@ -12,34 +11,24 @@ class CafetinRepository(db: AppDatabase) : ICafetinRepository {
 
     private val personaDao    = db.personaDao()
     private val movimientoDao = db.movimientoDao()
+    private val catalogoDao   = db.catalogoDao()
 
     // ── Personas ──────────────────────────────────────────────────────────────
     override val personas = personaDao.getAll()
     override suspend fun insertPersona(persona: Persona)  = personaDao.insert(persona)
     override suspend fun updatePersona(persona: Persona)  = personaDao.update(persona)
     override suspend fun deletePersona(persona: Persona)  = personaDao.delete(persona)
-
-    /**
-     * Marca el estado "Enviado" de una persona hasta [hastaMs].
-     * El estado expira automáticamente: la UI lo ignora si ya pasó ese timestamp.
-     */
     override suspend fun marcarEnviado(personaId: Int, hastaMs: Long) =
         personaDao.marcarEnviado(personaId, hastaMs)
 
     // ── Movimientos ───────────────────────────────────────────────────────────
-
-    /** Solo los movimientos de HOY para una persona (pantalla Detalle) */
     override fun movimientosPorPersonaHoy(personaId: Int): Flow<List<Movimiento>> =
         movimientoDao.getByPersonaHoy(personaId, inicioDeDia(System.currentTimeMillis()))
 
-    /** Movimientos de una persona en un rango fechas (para exportar PDF) */
     override suspend fun movimientosPorPersonaEnRango(
-        personaId: Int,
-        desde: Long,
-        hasta: Long
+        personaId: Int, desde: Long, hasta: Long
     ): List<Movimiento> = movimientoDao.getByPersonaEnRango(personaId, desde, hasta)
 
-    /** Movimientos de cualquier día completo (pantalla Historial general) */
     override fun movimientosPorDia(fechaMs: Long): Flow<List<Movimiento>> {
         val desde = inicioDeDia(fechaMs)
         val hasta = desde + DateUtils.UN_DIA_MS
@@ -53,7 +42,6 @@ class CafetinRepository(db: AppDatabase) : ICafetinRepository {
     override fun cobradoHoy(): Flow<Long> =
         movimientoDao.getCobradoDesde(inicioDeDia(System.currentTimeMillis()))
 
-    // ── Semántica ─────────────────────────────────────────────────────────────
     override suspend fun registrarFiado(personaId: Int, montoCentavos: Long, nota: String) {
         movimientoDao.insert(
             Movimiento(personaId = personaId, tipo = TipoMovimiento.FIADO, monto = montoCentavos, nota = nota)
@@ -68,4 +56,41 @@ class CafetinRepository(db: AppDatabase) : ICafetinRepository {
 
     override suspend fun editarMovimiento(movimiento: Movimiento)   = movimientoDao.update(movimiento)
     override suspend fun eliminarMovimiento(movimiento: Movimiento) = movimientoDao.delete(movimiento)
+
+    // ── Catálogo ──────────────────────────────────────────────────────────────
+    override fun getCategoriasFlow(): Flow<List<CatalogoCategoria>> =
+        catalogoDao.getAllCategorias()
+
+    override fun getAllProductosFlow(): Flow<List<CatalogoProducto>> =
+        catalogoDao.getAllProductos()
+
+    override fun getProductosByCategoriaFlow(categoriaId: Int): Flow<List<CatalogoProducto>> =
+        catalogoDao.getProductosByCategoria(categoriaId)
+
+    override suspend fun getCategoriaConProductos(): List<CategoriaConProductos> {
+        val categorias = catalogoDao.getAllCategoriasSnapshot()
+        val productos  = catalogoDao.getAllProductosSnapshot()
+        val porCategoria = productos.groupBy { it.categoriaId }
+        return categorias.map { cat ->
+            CategoriaConProductos(cat, porCategoria[cat.id] ?: emptyList())
+        }
+    }
+
+    override suspend fun insertCategoria(cat: CatalogoCategoria): Long =
+        catalogoDao.insertCategoria(cat)
+
+    override suspend fun updateCategoria(cat: CatalogoCategoria) =
+        catalogoDao.updateCategoria(cat)
+
+    override suspend fun deleteCategoria(cat: CatalogoCategoria) =
+        catalogoDao.deleteCategoria(cat)
+
+    override suspend fun insertProducto(prod: CatalogoProducto): Long =
+        catalogoDao.insertProducto(prod)
+
+    override suspend fun updateProducto(prod: CatalogoProducto) =
+        catalogoDao.updateProducto(prod)
+
+    override suspend fun deleteProducto(prod: CatalogoProducto) =
+        catalogoDao.deleteProducto(prod)
 }

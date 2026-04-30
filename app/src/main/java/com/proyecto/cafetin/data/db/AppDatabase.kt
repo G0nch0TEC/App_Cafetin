@@ -5,32 +5,30 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
+import com.proyecto.cafetin.data.model.CatalogoCategoria
+import com.proyecto.cafetin.data.model.CatalogoProducto
 import com.proyecto.cafetin.data.model.Movimiento
 import com.proyecto.cafetin.data.model.Persona
 
-@Database(entities = [Persona::class, Movimiento::class], version = 2, exportSchema = false)
+@Database(
+    entities = [
+        Persona::class,
+        Movimiento::class,
+        CatalogoCategoria::class,
+        CatalogoProducto::class
+    ],
+    version = 3,
+    exportSchema = false
+)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun personaDao(): PersonaDao
     abstract fun movimientoDao(): MovimientoDao
+    abstract fun catalogoDao(): CatalogoDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
-
-        /**
-         * Migración 1→2: agrega la columna enviadoHasta a la tabla personas.
-         * El valor por defecto 0 significa "sin estado Enviado".
-         */
-        private val MIGRATION_1_2 = object : Migration(1, 2) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "ALTER TABLE personas ADD COLUMN enviadoHasta INTEGER NOT NULL DEFAULT 0"
-                )
-            }
-        }
 
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -39,7 +37,10 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "cafetin_db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(
+                        DatabaseMigrations.MIGRATION_1_2,
+                        DatabaseMigrations.MIGRATION_2_3
+                    )
                     .build()
                     .also { INSTANCE = it }
             }

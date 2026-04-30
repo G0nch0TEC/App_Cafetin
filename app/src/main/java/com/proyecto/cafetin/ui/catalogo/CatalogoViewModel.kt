@@ -1,0 +1,107 @@
+package com.proyecto.cafetin.ui.catalogo
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import com.proyecto.cafetin.CafetinApp
+import com.proyecto.cafetin.data.model.CatalogoCategoria
+import com.proyecto.cafetin.data.model.CatalogoProducto
+import com.proyecto.cafetin.repository.ICafetinRepository
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+
+class CatalogoViewModel(
+    private val repository: ICafetinRepository
+) : ViewModel() {
+
+    val categorias: StateFlow<List<CatalogoCategoria>> =
+        repository.getCategoriasFlow()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _snackEvents = Channel<String>(Channel.BUFFERED)
+    val snackEvents = _snackEvents.receiveAsFlow()
+
+    // ── Productos por categoría seleccionada ──────────────────────────────────
+    private val _categoriaSeleccionada = MutableStateFlow<CatalogoCategoria?>(null)
+    val categoriaSeleccionada: StateFlow<CatalogoCategoria?> = _categoriaSeleccionada.asStateFlow()
+
+    val productosDeCategoriaActual: StateFlow<List<CatalogoProducto>> =
+        _categoriaSeleccionada
+            .flatMapLatest { cat ->
+                if (cat == null) flowOf(emptyList())
+                else repository.getProductosByCategoriaFlow(cat.id)
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun seleccionarCategoria(cat: CatalogoCategoria?) {
+        _categoriaSeleccionada.value = cat
+    }
+
+    // ── CRUD Categorías ───────────────────────────────────────────────────────
+
+    fun agregarCategoria(nombre: String, emoji: String) {
+        if (nombre.isBlank()) return
+        viewModelScope.launch {
+            val orden = categorias.value.size
+            repository.insertCategoria(
+                CatalogoCategoria(nombre = nombre.trim(), emoji = emoji.ifBlank { "📦" }, orden = orden)
+            )
+            _snackEvents.send("Categoría \"${nombre.trim()}\" creada")
+        }
+    }
+
+    fun editarCategoria(cat: CatalogoCategoria, nuevoNombre: String, nuevoEmoji: String) {
+        if (nuevoNombre.isBlank()) return
+        viewModelScope.launch {
+            repository.updateCategoria(cat.copy(nombre = nuevoNombre.trim(), emoji = nuevoEmoji.ifBlank { cat.emoji }))
+            _snackEvents.send("Categoría actualizada")
+        }
+    }
+
+    fun eliminarCategoria(cat: CatalogoCategoria) {
+        viewModelScope.launch {
+            repository.deleteCategoria(cat)
+            if (_categoriaSeleccionada.value?.id == cat.id) _categoriaSeleccionada.value = null
+            _snackEvents.send("Categoría \"${cat.nombre}\" eliminada")
+        }
+    }
+
+    // ── CRUD Productos ────────────────────────────────────────────────────────
+
+    fun agregarProducto(categoriaId: Int, nombre: String, montoCentavos: Long) {
+        if (nombre.isBlank() || montoCentavos <= 0) return
+        viewModelScope.launch {
+            val orden = productosDeCategoriaActual.value.size
+            repository.insertProducto(
+                CatalogoProducto(categoriaId = categoriaId, nombre = nombre.trim(), montoCentavos = montoCentavos, orden = orden)
+            )
+            _snackEvents.send("\"${nombre.trim()}\" agregado")
+        }
+    }
+
+    fun editarProducto(prod: CatalogoProducto, nuevoNombre: String, nuevoMonto: Long) {
+        if (nuevoNombre.isBlank() || nuevoMonto <= 0) return
+        viewModelScope.launch {
+            repository.updateProducto(prod.copy(nombre = nuevoNombre.trim(), montoCentavos = nuevoMonto))
+            _snackEvents.send("Producto actualizado")
+        }
+    }
+
+    fun eliminarProducto(prod: CatalogoProducto) {
+        viewModelScope.launch {
+            repository.deleteProducto(prod)
+            _snackEvents.send("\"${prod.nombre}\" eliminado")
+        }
+    }
+
+    // ── Factory ───────────────────────────────────────────────────────────────
+
+    class Factory(private val app: android.app.Application) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            val repo = (app as CafetinApp).container.repository
+            return CatalogoViewModel(repo) as T
+        }
+    }
+}
