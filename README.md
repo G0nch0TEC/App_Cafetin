@@ -14,8 +14,8 @@ App Android para gestionar fiados en una cafetería escolar. Reemplaza el cuader
 
 ## 📸 Capturas de pantalla
 
-| Clientes | Detalle | Historial |
-|----------|---------|-----------|
+| Clientes | Detalle | Historial | catalogo |
+|----------|---------|-----------|----------|
 | ![Clientes](screenshots/personas.png) | ![Detalle](screenshots/detalle.png) | ![Historial](screenshots/historial.png) | ![Catalogo](screenshots/catalogo.png) |
 
 ---
