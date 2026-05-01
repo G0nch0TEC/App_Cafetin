@@ -36,6 +36,7 @@ class CafetinRepository(db: AppDatabase) : ICafetinRepository {
     }
 
     override fun saldoPorPersona(personaId: Int): Flow<Long> = movimientoDao.getSaldoByPersona(personaId)
+    override suspend fun saldoPorPersonaUnaVez(personaId: Int): Long = movimientoDao.getSaldoByPersonaUnaVez(personaId)
     override val saldoTotal: Flow<Long> = movimientoDao.getSaldoTotal()
     override val totalAFavor: Flow<Long> = movimientoDao.getTotalAFavor()
 

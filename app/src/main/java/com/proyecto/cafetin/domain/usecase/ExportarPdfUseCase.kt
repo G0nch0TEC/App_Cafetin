@@ -33,13 +33,17 @@ class ExportarPdfUseCase(
 
         if (movs.isEmpty()) return Resultado.SinMovimientos
 
+        // Saldo REAL acumulado de toda la historia del cliente (no solo del rango)
+        val saldoReal = repo.saldoPorPersonaUnaVez(persona.id)
+
         val file = PdfExporter.generar(
             context            = appContext,
             nombrePersona      = persona.nombre,
             descripcionPersona = persona.descripcion,
             movimientos        = movs,
             desde              = desdeMs,
-            hasta              = hastaMs
+            hasta              = hastaMs,
+            saldoRealCentavos  = saldoReal
         ) ?: return Resultado.ErrorAlGenerar
 
         repo.marcarEnviado(persona.id, finDeDia(System.currentTimeMillis()))

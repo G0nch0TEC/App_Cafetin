@@ -10,6 +10,8 @@ interface IMovimientoRepository {
     fun movimientosPorDia(fechaMs: Long): Flow<List<Movimiento>>
     suspend fun movimientosPorPersonaEnRango(personaId: Int, desde: Long, hasta: Long): List<Movimiento>
     fun saldoPorPersona(personaId: Int): Flow<Long>
+    /** Saldo acumulado total de una persona — lectura única (suspend), para uso en exports */
+    suspend fun saldoPorPersonaUnaVez(personaId: Int): Long
     fun cobradoHoy(): Flow<Long>
     suspend fun registrarFiado(personaId: Int, montoCentavos: Long, nota: String)
     suspend fun registrarPago(personaId: Int, montoCentavos: Long, nota: String)

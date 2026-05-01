@@ -37,6 +37,13 @@ interface MovimientoDao {
     """)
     fun getSaldoByPersona(personaId: Int): Flow<Long>
 
+    /** Lectura única del saldo real (para exportaciones) */
+    @Query("""
+        SELECT COALESCE(SUM(CASE WHEN tipo = 'FIADO' THEN monto ELSE -monto END), 0)
+        FROM movimientos WHERE personaId = :personaId
+    """)
+    suspend fun getSaldoByPersonaUnaVez(personaId: Int): Long
+
     @Query("""
         SELECT COALESCE(SUM(saldo), 0)
         FROM (

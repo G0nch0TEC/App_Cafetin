@@ -74,13 +74,17 @@ object PdfExporter {
         descripcionPersona: String,
         movimientos: List<Movimiento>,
         desde: Long,
-        hasta: Long
+        hasta: Long,
+        saldoRealCentavos: Long  // Saldo acumulado TOTAL de la persona (no solo del rango)
     ): File? = runCatching {
 
         val movOrdenados  = movimientos.sortedBy { it.fecha }
         val totalFiado    = movimientos.filter { it.tipo == TipoMovimiento.FIADO }.sumOf { it.monto }
         val totalCobrado  = movimientos.filter { it.tipo == TipoMovimiento.PAGO  }.sumOf { it.monto }
+        // pendiente del período (solo informativo en los totales de tabla)
         val pendiente     = totalFiado - totalCobrado
+        // El saldo real es el que viene de TODA la historia del cliente
+        val saldoPendienteReal = saldoRealCentavos
         val totalPaginas  = estimarPaginas(movOrdenados.size)
 
         val doc = PdfDocument()
@@ -119,7 +123,7 @@ object PdfExporter {
         )
 
         // ── Bloque resumen destacado ──────────────────────────────────────────
-        y = dibujarResumen(canvas, y, totalFiado, totalCobrado, pendiente)
+        y = dibujarResumen(canvas, y, totalFiado, totalCobrado, pendiente, saldoPendienteReal)
 
         // ── Cabecera de tabla ─────────────────────────────────────────────────
         y = dibujarCabeceraTabla(canvas, y)
@@ -245,10 +249,10 @@ object PdfExporter {
 
         // ── Caja de saldo pendiente (protagonista) ────────────────────────────
         y += 6f
-        val saldoPositivo = pendiente > 0L
+        val saldoPositivo = saldoPendienteReal > 0L
         val bgSaldo   = if (saldoPositivo) C_RED_LT   else C_GREEN_LT
         val fgSaldo   = if (saldoPositivo) C_RED      else C_GREEN
-        val labelSaldo= if (saldoPositivo) "SALDO PENDIENTE" else "CUENTA AL DÍA ✓"
+        val labelSaldo= if (saldoPositivo) "SALDO PENDIENTE TOTAL" else "CUENTA AL DÍA ✓"
 
         val cajaH = 54f
         val cajaRect = RectF(MARGIN, y, MARGIN + CONTENT_W, y + cajaH)
@@ -264,8 +268,16 @@ object PdfExporter {
             MARGIN + 16f, y + 22f,
             paint(fgSaldo, 11f, bold = true)
         )
+        // Nota aclaratoria si el saldo real difiere del saldo del período
+        if (saldoPendienteReal != pendiente) {
+            canvas.drawText(
+                "(incluye deuda de períodos anteriores)",
+                MARGIN + 16f, y + 38f,
+                paint(fgSaldo, 8f)
+            )
+        }
         canvas.drawText(
-            pendiente.centavosAtexto(),
+            saldoPendienteReal.centavosAtexto(),
             MARGIN + CONTENT_W - 10f, y + 35f,
             paint(fgSaldo, 22f, bold = true, align = Paint.Align.RIGHT)
         )
@@ -366,7 +378,8 @@ object PdfExporter {
         y: Float,
         totalFiado: Long,
         totalCobrado: Long,
-        pendiente: Long
+        pendiente: Long,
+        saldoPendienteReal: Long
     ): Float {
         val cardW = (CONTENT_W - 12f) / 3f
         val cardH = 58f
@@ -377,10 +390,10 @@ object PdfExporter {
             Card("Total fiado",   totalFiado.centavosAtexto(),   C_RED_LT,   C_RED),
             Card("Total cobrado", totalCobrado.centavosAtexto(), C_GREEN_LT, C_GREEN),
             Card(
-                if (pendiente > 0) "Saldo pendiente" else "Cuenta al día",
-                pendiente.centavosAtexto(),
-                if (pendiente > 0) C_RED_LT else C_GREEN_LT,
-                if (pendiente > 0) C_RED    else C_GREEN
+                if (saldoPendienteReal > 0) "Saldo pendiente total" else "Cuenta al día",
+                saldoPendienteReal.centavosAtexto(),
+                if (saldoPendienteReal > 0) C_RED_LT else C_GREEN_LT,
+                if (saldoPendienteReal > 0) C_RED    else C_GREEN
             )
         )
 
