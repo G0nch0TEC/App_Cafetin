@@ -174,9 +174,31 @@ class DetalleViewModel(
                     )
                 is ExportarPdfUseCase.Resultado.Exito -> {
                     _exportState.value = ExportState(mostrando = false)
+                    // Solo lanzamos el share sheet; el marcado ocurre en confirmarEnviado()
                     _eventos.send(DetalleEvent.CompartirPdf(resultado.uri))
                 }
             }
+        }
+    }
+
+    /**
+     * Llamar después de que el usuario completó el share sheet (no canceló).
+     * Marca a la persona como "Enviado" hasta el final del día actual.
+     */
+    fun confirmarEnviado() {
+        val persona = _persona.value ?: return
+        viewModelScope.launch {
+            repository.marcarEnviado(persona.id, finDeDiaHoy())
+        }
+    }
+
+    /**
+     * Quita manualmente el marcador "Enviado" de la persona actual.
+     */
+    fun quitarEnviado() {
+        val persona = _persona.value ?: return
+        viewModelScope.launch {
+            repository.marcarEnviado(persona.id, 0L)
         }
     }
 

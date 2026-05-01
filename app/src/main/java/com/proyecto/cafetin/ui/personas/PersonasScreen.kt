@@ -68,8 +68,9 @@ fun PersonasScreen(
     val busqueda         by vm.busqueda.collectAsState()
     val orden            by vm.orden.collectAsState()
     val filtro           by vm.filtro.collectAsState()
-    var mostrarDialogo   by remember { mutableStateOf(false) }
-    var personaAEliminar by remember { mutableStateOf<Persona?>(null) }
+    var mostrarDialogo      by remember { mutableStateOf(false) }
+    var personaAEliminar    by remember { mutableStateOf<Persona?>(null) }
+    var personaQuitarEnviado by remember { mutableStateOf<Persona?>(null) }
     var mostrarOrden     by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
@@ -327,7 +328,8 @@ fun PersonasScreen(
                         saldo       = saldo,
                         estaEnviado = estaEnviado,
                         onClick     = { onPersonaClick(persona.id) },
-                        onDelete    = { personaAEliminar = persona }
+                        onDelete    = { personaAEliminar = persona },
+                        onQuitarEnviado = { personaQuitarEnviado = persona }
                     )
                     HorizontalDivider(color = Color(0xFFE7E0EC))
                 }
@@ -352,6 +354,23 @@ fun PersonasScreen(
             onConfirm = {
                 vm.eliminarPersona(persona)
                 personaAEliminar = null
+            }
+        )
+    }
+
+    personaQuitarEnviado?.let { persona ->
+        AlertDialog(
+            onDismissRequest = { personaQuitarEnviado = null },
+            title = { Text("Quitar marcador") },
+            text  = { Text("¿Querés quitar el estado \"Enviado\" de ${persona.nombre}?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.quitarEnviado(persona)
+                    personaQuitarEnviado = null
+                }) { Text("Quitar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { personaQuitarEnviado = null }) { Text("Cancelar") }
             }
         )
     }
@@ -486,7 +505,8 @@ fun PersonaRow(
     saldo: Long,
     estaEnviado: Boolean,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onQuitarEnviado: () -> Unit = {}
 ) {
     Row(
         Modifier
@@ -515,12 +535,13 @@ fun PersonaRow(
                 Text(persona.descripcion, fontSize = 12.sp, color = TextGray, modifier = Modifier.padding(top = 1.dp))
         }
 
-        // Badge "Enviado"
+        // Badge "Enviado" — tappable para quitarlo manualmente
         if (estaEnviado) {
             Box(
                 Modifier
                     .clip(RoundedCornerShape(100.dp))
                     .background(EnviadoBg)
+                    .clickable { onQuitarEnviado() }
                     .padding(horizontal = 8.dp, vertical = 3.dp)
             ) {
                 Text(

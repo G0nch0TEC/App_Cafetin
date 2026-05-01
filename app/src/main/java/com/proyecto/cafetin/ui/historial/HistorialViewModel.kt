@@ -25,8 +25,12 @@ data class GrupoPersona(
     val persona: Persona,
     val movimientos: List<Movimiento>,
     val totalFiado: Long,
-    val totalCobrado: Long
+    val totalCobrado: Long,
+    /** Saldo histórico acumulado real de la persona (todos los tiempos) */
+    val saldoReal: Long = 0L
 )
+
+enum class FiltroTipo { TODOS, FIADOS, PAGOS }
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HistorialViewModel(private val repository: ICafetinRepository) : ViewModel() {
@@ -44,6 +48,11 @@ class HistorialViewModel(private val repository: ICafetinRepository) : ViewModel
     val busqueda: StateFlow<String> = _busqueda.asStateFlow()
     fun setBusqueda(q: String) { _busqueda.value = q }
 
+    // ── Filtro por tipo ───────────────────────────────────────────────────────
+    private val _filtroTipo = MutableStateFlow(FiltroTipo.TODOS)
+    val filtroTipo: StateFlow<FiltroTipo> = _filtroTipo.asStateFlow()
+    fun setFiltroTipo(f: FiltroTipo) { _filtroTipo.value = f }
+
     // ── Movimientos del día ───────────────────────────────────────────────────
     private val movimientosDia: StateFlow<List<Movimiento>> = _diaActual
         .flatMapLatest { repository.movimientosPorDia(it) }
@@ -52,29 +61,47 @@ class HistorialViewModel(private val repository: ICafetinRepository) : ViewModel
     val personas: StateFlow<List<Persona>> = repository.personas
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    // ── Grupos por persona (con filtro de búsqueda aplicado) ─────────────────
+    // Saldos reales de todas las personas (flow reactivo)
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val saldosReales: StateFlow<Map<Int, Long>> = personas
+        .flatMapLatest { lista ->
+            if (lista.isEmpty()) flowOf(emptyMap())
+            else combine(
+                lista.map { p -> repository.saldoPorPersona(p.id).map { p.id to it } }
+            ) { pares -> pares.toMap() }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    // ── Grupos por persona (con filtro de búsqueda y tipo aplicado) ──────────
     val gruposFiltrados: StateFlow<List<GrupoPersona>> = combine(
-        movimientosDia, personas, _busqueda
-    ) { movs, personas, query ->
+        movimientosDia, personas, _busqueda, _filtroTipo, saldosReales
+    ) { movs, personas, query, filtroTipo, saldos ->
         val personasMap = personas.associateBy { it.id }
 
-        val agrupados = movs.groupBy { it.personaId }
+        // Aplicar filtro de tipo antes de agrupar
+        val movsFiltrados = when (filtroTipo) {
+            FiltroTipo.TODOS   -> movs
+            FiltroTipo.FIADOS  -> movs.filter { it.tipo == TipoMovimiento.FIADO }
+            FiltroTipo.PAGOS   -> movs.filter { it.tipo == TipoMovimiento.PAGO  }
+        }
 
-        agrupados
+        movsFiltrados
+            .groupBy { it.personaId }
             .mapNotNull { (personaId, movsDePers) ->
                 val persona = personasMap[personaId] ?: return@mapNotNull null
                 GrupoPersona(
                     persona      = persona,
                     movimientos  = movsDePers,
                     totalFiado   = movsDePers.filter { it.tipo == TipoMovimiento.FIADO }.sumOf { it.monto },
-                    totalCobrado = movsDePers.filter { it.tipo == TipoMovimiento.PAGO  }.sumOf { it.monto }
+                    totalCobrado = movsDePers.filter { it.tipo == TipoMovimiento.PAGO  }.sumOf { it.monto },
+                    saldoReal    = saldos[personaId] ?: 0L
                 )
             }
             .filter { query.isBlank() || fuzzyMatch(it.persona.nombre, query) }
             .sortedByDescending { it.totalFiado - it.totalCobrado }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    // ── Resumen global del día ────────────────────────────────────────────────
+    // ── Resumen global del día (sobre movimientos sin filtro de tipo) ─────────
     val resumenDia: StateFlow<ResumenDia> = movimientosDia.map { lista ->
         val fiado   = lista.filter { it.tipo == TipoMovimiento.FIADO }.sumOf { it.monto }
         val cobrado = lista.filter { it.tipo == TipoMovimiento.PAGO  }.sumOf { it.monto }
@@ -82,7 +109,6 @@ class HistorialViewModel(private val repository: ICafetinRepository) : ViewModel
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ResumenDia(0, 0, 0))
 
     // ── Navegación ────────────────────────────────────────────────────────────
-    // La búsqueda se mantiene al cambiar de día para no tener que reescribir el nombre
     fun diaAnterior() {
         _diaActual.value = _diaActual.value - DateUtils.UN_DIA_MS
     }
@@ -98,6 +124,15 @@ class HistorialViewModel(private val repository: ICafetinRepository) : ViewModel
         _diaActual.value = inicioDeDiaHoy()
     }
 
+    /** Salta directamente a un día elegido desde el DatePicker (timestamp UTC medianoche del picker) */
+    fun irADia(utcMidnightMs: Long) {
+        val localMs = DateUtils.desdeDatePicker(utcMidnightMs)
+        // No permitir fechas futuras
+        if (localMs <= inicioDeDiaHoy()) {
+            _diaActual.value = localMs
+        }
+    }
+
     fun eliminarMovimiento(movimiento: Movimiento) {
         viewModelScope.launch { repository.eliminarMovimiento(movimiento) }
     }
@@ -108,5 +143,4 @@ class HistorialViewModel(private val repository: ICafetinRepository) : ViewModel
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
             HistorialViewModel(repository) as T
     }
-
 }

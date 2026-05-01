@@ -70,6 +70,12 @@ class PersonasViewModel(private val repository: ICafetinRepository) : ViewModel(
         }
     }
 
+    fun quitarEnviado(persona: Persona) {
+        viewModelScope.launch {
+            repository.marcarEnviado(persona.id, 0L)
+        }
+    }
+
     // ✅ Factory para inyectar el repositorio manualmente
     class Factory(private val repository: ICafetinRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")

@@ -1,6 +1,8 @@
 package com.proyecto.cafetin.ui.detalle
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -64,6 +66,17 @@ fun DetalleScreen(
         vm.snackEvents.collect { msg -> snackHost.showSnackbar(msg) }
     }
 
+    // Lanzador del share sheet: si el usuario completa el envío (RESULT_OK),
+    // marcamos a la persona como "Enviado". Si cancela, no se marca nada.
+    val shareLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            vm.confirmarEnviado()
+        }
+        // Si result.resultCode == RESULT_CANCELED → el usuario cerró sin enviar, no hacemos nada.
+    }
+
     LaunchedEffect(Unit) {
         vm.eventos.collect { evento ->
             when (evento) {
@@ -74,7 +87,7 @@ fun DetalleScreen(
                         putExtra(Intent.EXTRA_SUBJECT, "Reporte de ${vm.persona.value?.nombre}")
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
-                    context.startActivity(Intent.createChooser(intent, "Compartir reporte"))
+                    shareLauncher.launch(Intent.createChooser(intent, "Compartir reporte"))
                 }
             }
         }

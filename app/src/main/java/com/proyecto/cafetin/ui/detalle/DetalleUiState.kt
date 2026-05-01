@@ -5,6 +5,10 @@ package com.proyecto.cafetin.ui.detalle
  * Se consumen via Channel para garantizar que no se repitan al recomponerse.
  */
 sealed class DetalleEvent {
+    /**
+     * El PDF ya está generado. La UI debe lanzar el share sheet y, si el usuario
+     * completa el envío, llamar a [DetalleViewModel.confirmarEnviado].
+     */
     data class CompartirPdf(val uri: android.net.Uri) : DetalleEvent()
 }
 

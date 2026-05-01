@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
@@ -29,7 +30,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.proyecto.cafetin.CafetinApp
 import com.proyecto.cafetin.data.model.Movimiento
@@ -40,6 +40,7 @@ import com.proyecto.cafetin.util.MoneyUtils.centavosAtexto
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistorialScreen(onBack: () -> Unit) {
     val app = LocalContext.current.applicationContext as CafetinApp
@@ -52,13 +53,57 @@ fun HistorialScreen(onBack: () -> Unit) {
     val resumen    by vm.resumenDia.collectAsState()
     val esHoy      by vm.esHoy.collectAsState()
     val busqueda   by vm.busqueda.collectAsState()
+    val filtroTipo by vm.filtroTipo.collectAsState()
 
     val sdfTitulo = remember { SimpleDateFormat("EEEE, d 'de' MMMM", Locale("es")) }
+    val sdfAnio   = remember { SimpleDateFormat("EEEE, d 'de' MMMM 'de' yyyy", Locale("es")) }
     val sdfHora   = remember { SimpleDateFormat("h:mm a", Locale("es")) }
 
+    // Mostrar año en el título solo si no es el año actual
+    val anioActual = remember { Calendar.getInstance().get(Calendar.YEAR) }
+    val anioDelDia = remember(diaActual) {
+        Calendar.getInstance().apply { timeInMillis = diaActual }.get(Calendar.YEAR)
+    }
+
     val tituloDia = remember(diaActual, esHoy) {
-        val base = sdfTitulo.format(Date(diaActual)).replaceFirstChar { it.uppercase() }
+        val fmt  = if (anioDelDia != anioActual) sdfAnio else sdfTitulo
+        val base = fmt.format(Date(diaActual)).replaceFirstChar { it.uppercase() }
         if (esHoy) "Hoy · $base" else base
+    }
+
+    // DatePicker para saltar a un día concreto
+    var mostrarDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = diaActual,
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                // No permitir fechas futuras (comparar en UTC medianoche)
+                val hoyUtcMidnight = run {
+                    val cal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                    cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+                    cal.set(Calendar.SECOND, 0);      cal.set(Calendar.MILLISECOND, 0)
+                    cal.timeInMillis
+                }
+                return utcTimeMillis <= hoyUtcMidnight
+            }
+        }
+    )
+
+    if (mostrarDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { mostrarDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { vm.irADia(it) }
+                    mostrarDatePicker = false
+                }) { Text("Ir a este día") }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDatePicker = false }) { Text("Cancelar") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
     }
 
     Scaffold(
@@ -87,6 +132,14 @@ fun HistorialScreen(onBack: () -> Unit) {
                             Text("Hoy", color = PrimaryColor, fontSize = 14.sp)
                         }
                     }
+                    // Botón calendario para saltar a cualquier día
+                    IconButton(onClick = { mostrarDatePicker = true }) {
+                        Icon(
+                            Icons.Default.CalendarMonth,
+                            contentDescription = "Ir a fecha",
+                            tint = PrimaryColor
+                        )
+                    }
                 }
             }
         }
@@ -107,7 +160,6 @@ fun HistorialScreen(onBack: () -> Unit) {
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // Mejora 1: botón con etiqueta "Ayer" para mayor claridad
                             TextButton(onClick = vm::diaAnterior) {
                                 Icon(
                                     Icons.AutoMirrored.Filled.ArrowBack,
@@ -116,7 +168,7 @@ fun HistorialScreen(onBack: () -> Unit) {
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(Modifier.width(4.dp))
-                                Text("Ayer", color = PrimaryColor, fontSize = 13.sp)
+                                Text("Anterior", color = PrimaryColor, fontSize = 13.sp)
                             }
 
                             Text(
@@ -127,7 +179,6 @@ fun HistorialScreen(onBack: () -> Unit) {
                                 modifier = Modifier.weight(1f)
                             )
 
-                            // Mejora 1: si es hoy muestra texto estático, si no muestra "Mañana →"
                             if (esHoy) {
                                 Text(
                                     "Hoy",
@@ -137,7 +188,7 @@ fun HistorialScreen(onBack: () -> Unit) {
                                 )
                             } else {
                                 TextButton(onClick = vm::diaSiguiente) {
-                                    Text("Mañana", color = PrimaryColor, fontSize = 13.sp)
+                                    Text("Siguiente", color = PrimaryColor, fontSize = 13.sp)
                                     Spacer(Modifier.width(4.dp))
                                     Icon(
                                         Icons.AutoMirrored.Filled.ArrowForward,
@@ -153,7 +204,7 @@ fun HistorialScreen(onBack: () -> Unit) {
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
                                 .clip(RoundedCornerShape(28.dp))
                                 .background(SurfaceGray)
                                 .padding(horizontal = 14.dp),
@@ -182,7 +233,17 @@ fun HistorialScreen(onBack: () -> Unit) {
                             )
                         }
 
-                        Spacer(Modifier.height(8.dp))
+                        // ── Chips de filtro por tipo ──────────────────────────
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FiltroTipoChip("Todos",  FiltroTipo.TODOS,  filtroTipo) { vm.setFiltroTipo(it) }
+                            FiltroTipoChip("Fiados", FiltroTipo.FIADOS, filtroTipo) { vm.setFiltroTipo(it) }
+                            FiltroTipoChip("Pagos",  FiltroTipo.PAGOS,  filtroTipo) { vm.setFiltroTipo(it) }
+                        }
                     }
                 }
             }
@@ -199,7 +260,7 @@ fun HistorialScreen(onBack: () -> Unit) {
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             ResumenCard("Fiado del día",  resumen.totalFiado.centavosAtexto(),   DebtRed, Modifier.weight(1f))
-                            ResumenCard("Cobrado hoy",    resumen.totalCobrado.centavosAtexto(), OkGreen, Modifier.weight(1f))
+                            ResumenCard("Cobrado",        resumen.totalCobrado.centavosAtexto(), OkGreen, Modifier.weight(1f))
                         }
                         if (resumen.totalFiado > 0 || resumen.totalCobrado > 0) {
                             val netoColor = if (resumen.neto > 0) DebtRed else OkGreen
@@ -250,7 +311,7 @@ fun HistorialScreen(onBack: () -> Unit) {
                         ) {
                             Text(
                                 if (busqueda.isBlank())
-                                    "No hay fiados ni pagos registrados\npara este día."
+                                    "No hay movimientos registrados\npara este día."
                                 else
                                     "No se encontró ninguna persona\ncon ese nombre.",
                                 fontSize = 14.sp,
@@ -275,6 +336,39 @@ fun HistorialScreen(onBack: () -> Unit) {
     }
 }
 
+// ── Chip de filtro por tipo ───────────────────────────────────────────────────
+
+@Composable
+private fun FiltroTipoChip(
+    label: String,
+    valor: FiltroTipo,
+    seleccionado: FiltroTipo,
+    onClick: (FiltroTipo) -> Unit
+) {
+    val activo = seleccionado == valor
+    val bg     = when {
+        activo && valor == FiltroTipo.FIADOS -> Color(0xFFF9DEDC)
+        activo && valor == FiltroTipo.PAGOS  -> Color(0xFFD7F3E3)
+        activo                               -> PrimaryColor
+        else                                 -> SurfaceGray
+    }
+    val fg = when {
+        activo && valor == FiltroTipo.FIADOS -> DebtRed
+        activo && valor == FiltroTipo.PAGOS  -> OkGreen
+        activo                               -> Color.White
+        else                                 -> TextGray
+    }
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(100.dp))
+            .background(bg)
+            .clickable { onClick(valor) }
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+    ) {
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = fg)
+    }
+}
+
 // ── Tarjeta colapsable por persona ───────────────────────────────────────────
 
 @Composable
@@ -285,25 +379,47 @@ private fun GrupoPersonaCard(
 ) {
     var expandido by remember(grupo.persona.id) { mutableStateOf(false) }
 
-    val netoPers   = grupo.totalFiado - grupo.totalCobrado
-    val chipBg     = if (netoPers > 0) DebtRedBg  else OkGreenBg
-    val chipFg     = if (netoPers > 0) DebtRed    else OkGreen
+    val netoDia = grupo.totalFiado - grupo.totalCobrado
 
-    // Mejora 4: chip distingue deuda del día vs deuda total
-    val chipTxtDia   = if (netoPers > 0) "Hoy: ${netoPers.centavosAtexto()}" else "Al día hoy"
+    // Chip del día: muestra lo que pasó HOY con esta persona
+    val chipDiaBg  = when {
+        netoDia > 0 -> Color(0xFFF9DEDC)
+        netoDia < 0 -> Color(0xFFD7F3E3)
+        else        -> Color(0xFFE8F5E9)
+    }
+    val chipDiaFg  = when {
+        netoDia > 0 -> DebtRed
+        netoDia < 0 -> OkGreen
+        else        -> OkGreen
+    }
+    val chipDiaTxt = when {
+        netoDia > 0 -> "+${netoDia.centavosAtexto()}"
+        netoDia < 0 -> "Pagó ${(-netoDia).centavosAtexto()}"
+        else        -> "Saldado"
+    }
+
+    // Saldo total real (histórico acumulado)
+    val saldoReal = grupo.saldoReal
+    val saldoRealTxt = when {
+        saldoReal > 0 -> "Debe en total: ${saldoReal.centavosAtexto()}"
+        saldoReal < 0 -> "A favor: ${(-saldoReal).centavosAtexto()}"
+        else          -> "Sin deuda total"
+    }
+    val saldoRealColor = when {
+        saldoReal > 0 -> DebtRed
+        saldoReal < 0 -> OkGreen
+        else          -> TextGray
+    }
 
     Surface(
         color  = MaterialTheme.colorScheme.surface,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 0.dp)
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column {
-            // Cabecera de grupo — toca para colapsar/expandir
+            // Cabecera de grupo
             Row(
                 Modifier
                     .fillMaxWidth()
-                    // Mejora 3: el ícono de expansión usa el color primario para que se note
                     .clickable { expandido = !expandido }
                     .padding(horizontal = 16.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -325,24 +441,25 @@ private fun GrupoPersonaCard(
                     )
                 }
 
-                // Nombre + descripción
+                // Nombre + descripción + saldo total real
                 Column(Modifier.weight(1f)) {
                     Text(grupo.persona.nombre, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     if (grupo.persona.descripcion.isNotBlank())
                         Text(grupo.persona.descripcion, fontSize = 12.sp, color = TextGray)
+                    // Saldo real siempre visible — el contexto que faltaba
+                    Text(saldoRealTxt, fontSize = 11.sp, color = saldoRealColor)
                 }
 
-                // Chip neto de la persona en el día
+                // Chip de lo que pasó en el día
                 Box(
                     Modifier
                         .clip(RoundedCornerShape(100.dp))
-                        .background(chipBg)
+                        .background(chipDiaBg)
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
-                    Text(chipTxtDia, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = chipFg)
+                    Text(chipDiaTxt, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = chipDiaFg)
                 }
 
-                // Mejora 3: ícono con color primario para dejar claro que es interactivo
                 Icon(
                     if (expandido) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                     contentDescription = if (expandido) "Ocultar movimientos" else "Ver movimientos",
@@ -389,7 +506,6 @@ private fun MovimientoFilaCompacta(
     val iconBg     = if (esPago) OkGreenBg else Color(0xFFF9DEDC)
     val iconFg     = if (esPago) OkGreen   else Color(0xFF410E0B)
 
-    // Mejora 2: confirmación antes de eliminar mediante long-press
     var mostrarConfirmacion by remember { mutableStateOf(false) }
 
     if (mostrarConfirmacion) {
@@ -416,7 +532,6 @@ private fun MovimientoFilaCompacta(
     Row(
         Modifier
             .fillMaxWidth()
-            // Mejora 2: mantener presionado activa la eliminación, toque normal no hace nada
             .combinedClickable(
                 onClick     = {},
                 onLongClick = { mostrarConfirmacion = true }
@@ -425,7 +540,6 @@ private fun MovimientoFilaCompacta(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Ícono pequeño tipo movimiento
         Box(
             Modifier.size(28.dp).clip(CircleShape).background(iconBg),
             contentAlignment = Alignment.Center
