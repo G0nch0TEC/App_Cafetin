@@ -6,5 +6,5 @@ import com.proyecto.cafetin.repository.CafetinRepository
 
 class AppContainer(context: Context) {
     val database    by lazy { AppDatabase.getInstance(context) }
-    val repository  by lazy { CafetinRepository(database) }
+    val repository  by lazy { CafetinRepository(database, context) }
 }
