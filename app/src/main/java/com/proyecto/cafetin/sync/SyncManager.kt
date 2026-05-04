@@ -13,7 +13,7 @@ class SyncManager(private val context: Context) {
 
     companion object {
         // dependiendo de tu url o host, cambiar la url
-        const val API_BASE_URL = "http://192.168.1.100/cafetin-view-api"
+        const val API_BASE_URL = "http://192.168.18.22/cafetin-view-api"
     }
 
     fun isOnline(): Boolean {
