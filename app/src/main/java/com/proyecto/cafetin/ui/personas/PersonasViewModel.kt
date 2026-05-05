@@ -53,6 +53,12 @@ class PersonasViewModel(private val repository: ICafetinRepository) : ViewModel(
     private val _filtro = MutableStateFlow(FiltroPersonas.TODOS)
     val filtro: StateFlow<FiltroPersonas> = _filtro.asStateFlow()
 
+    // FIX: estado de error para mostrar en la UI en lugar de crashear
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    fun clearError() { _error.value = null }
+
     fun setBusqueda(q: String) { _busqueda.value = q }
     fun setOrden(o: OrdenPersonas) { _orden.value = o }
     fun setFiltro(f: FiltroPersonas) { _filtro.value = f }
@@ -60,13 +66,26 @@ class PersonasViewModel(private val repository: ICafetinRepository) : ViewModel(
     fun agregarPersona(nombre: String, descripcion: String) {
         if (nombre.isBlank()) return
         viewModelScope.launch {
-            repository.insertPersona(Persona(nombre = nombre.trim(), descripcion = descripcion.trim()))
+            try {
+                repository.insertPersona(
+                    Persona(nombre = nombre.trim(), descripcion = descripcion.trim())
+                )
+            } catch (e: android.database.sqlite.SQLiteConstraintException) {
+                // Persona con ese nombre y descripción ya existe — no crashear
+                _error.value = "Ya existe una persona con ese nombre"
+            } catch (e: Exception) {
+                _error.value = "Error al guardar: ${e.message}"
+            }
         }
     }
 
     fun eliminarPersona(persona: Persona) {
         viewModelScope.launch {
-            repository.deletePersona(persona)
+            try {
+                repository.deletePersona(persona)
+            } catch (e: Exception) {
+                _error.value = "Error al eliminar: ${e.message}"
+            }
         }
     }
 
@@ -76,7 +95,7 @@ class PersonasViewModel(private val repository: ICafetinRepository) : ViewModel(
         }
     }
 
-    // ✅ Factory para inyectar el repositorio manualmente
+    // Factory para inyectar el repositorio manualmente
     class Factory(private val repository: ICafetinRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =

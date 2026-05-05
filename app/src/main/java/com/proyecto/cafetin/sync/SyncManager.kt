@@ -12,7 +12,6 @@ import java.net.URL
 class SyncManager(private val context: Context) {
 
     companion object {
-        // dependiendo de tu url o host, cambiar la url
         const val API_BASE_URL = "http://192.168.18.22/cafetin-view-api"
     }
 
@@ -37,6 +36,8 @@ class SyncManager(private val context: Context) {
             val conn = (URL("$API_BASE_URL/upload").openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 doOutput = true
+                connectTimeout = 10_000
+                readTimeout = 30_000
                 setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
             }
 
@@ -48,11 +49,17 @@ class SyncManager(private val context: Context) {
             }
 
             val code = conn.responseCode
+            val body = try {
+                conn.inputStream.bufferedReader().readText()
+            } catch (e: Exception) {
+                conn.errorStream?.bufferedReader()?.readText() ?: "sin respuesta"
+            }
+
             tempFile.delete()
             conn.disconnect()
 
             if (code == 200) Result.success("Sincronizado correctamente")
-            else Result.failure(Exception("Error del servidor: $code"))
+            else Result.failure(Exception("Error del servidor: $code — $body"))
 
         } catch (e: Exception) {
             Result.failure(e)

@@ -4,7 +4,6 @@ import android.content.Context
 import com.proyecto.cafetin.data.db.AppDatabase
 import com.proyecto.cafetin.data.model.*
 import com.proyecto.cafetin.data.model.TipoMovimiento
-import com.proyecto.cafetin.sync.SyncManager
 import com.proyecto.cafetin.util.DateUtils
 import com.proyecto.cafetin.util.DateUtils.inicioDeDia
 import kotlinx.coroutines.flow.Flow
@@ -14,19 +13,14 @@ class CafetinRepository(db: AppDatabase, context: Context) : ICafetinRepository 
     private val personaDao    = db.personaDao()
     private val movimientoDao = db.movimientoDao()
     private val catalogoDao   = db.catalogoDao()
-    private val syncManager   = SyncManager(context)  // ← nuevo
-
-    private suspend fun sync() {
-        if (syncManager.isOnline()) syncManager.sincronizar()
-    }
 
     // ── Personas ──────────────────────────────────────────────────────────────
     override val personas = personaDao.getAll()
-    override suspend fun insertPersona(persona: Persona)  { personaDao.insert(persona);  sync() }
-    override suspend fun updatePersona(persona: Persona)  { personaDao.update(persona);  sync() }
-    override suspend fun deletePersona(persona: Persona)  { personaDao.delete(persona);  sync() }
+    override suspend fun insertPersona(persona: Persona)  { personaDao.insert(persona) }
+    override suspend fun updatePersona(persona: Persona)  { personaDao.update(persona) }
+    override suspend fun deletePersona(persona: Persona)  { personaDao.delete(persona) }
     override suspend fun marcarEnviado(personaId: Int, hastaMs: Long) {
-        personaDao.marcarEnviado(personaId, hastaMs); sync()
+        personaDao.marcarEnviado(personaId, hastaMs)
     }
 
     // ── Movimientos ───────────────────────────────────────────────────────────
@@ -55,18 +49,16 @@ class CafetinRepository(db: AppDatabase, context: Context) : ICafetinRepository 
         movimientoDao.insert(
             Movimiento(personaId = personaId, tipo = TipoMovimiento.FIADO, monto = montoCentavos, nota = nota)
         )
-        sync()
     }
 
     override suspend fun registrarPago(personaId: Int, montoCentavos: Long, nota: String) {
         movimientoDao.insert(
             Movimiento(personaId = personaId, tipo = TipoMovimiento.PAGO, monto = montoCentavos, nota = nota)
         )
-        sync()
     }
 
-    override suspend fun editarMovimiento(movimiento: Movimiento)   { movimientoDao.update(movimiento); sync() }
-    override suspend fun eliminarMovimiento(movimiento: Movimiento) { movimientoDao.delete(movimiento); sync() }
+    override suspend fun editarMovimiento(movimiento: Movimiento)   { movimientoDao.update(movimiento) }
+    override suspend fun eliminarMovimiento(movimiento: Movimiento) { movimientoDao.delete(movimiento) }
 
     // ── Catálogo ──────────────────────────────────────────────────────────────
     override fun getCategoriasFlow(): Flow<List<CatalogoCategoria>> = catalogoDao.getAllCategorias()
@@ -84,13 +76,13 @@ class CafetinRepository(db: AppDatabase, context: Context) : ICafetinRepository 
     }
 
     override suspend fun insertCategoria(cat: CatalogoCategoria): Long =
-        catalogoDao.insertCategoria(cat).also { sync() }
+        catalogoDao.insertCategoria(cat)
 
-    override suspend fun updateCategoria(cat: CatalogoCategoria) { catalogoDao.updateCategoria(cat); sync() }
-    override suspend fun deleteCategoria(cat: CatalogoCategoria) { catalogoDao.deleteCategoria(cat); sync() }
+    override suspend fun updateCategoria(cat: CatalogoCategoria) { catalogoDao.updateCategoria(cat) }
+    override suspend fun deleteCategoria(cat: CatalogoCategoria) { catalogoDao.deleteCategoria(cat) }
     override suspend fun insertProducto(prod: CatalogoProducto): Long =
-        catalogoDao.insertProducto(prod).also { sync() }
+        catalogoDao.insertProducto(prod)
 
-    override suspend fun updateProducto(prod: CatalogoProducto) { catalogoDao.updateProducto(prod); sync() }
-    override suspend fun deleteProducto(prod: CatalogoProducto) { catalogoDao.deleteProducto(prod); sync() }
+    override suspend fun updateProducto(prod: CatalogoProducto) { catalogoDao.updateProducto(prod) }
+    override suspend fun deleteProducto(prod: CatalogoProducto) { catalogoDao.deleteProducto(prod) }
 }
