@@ -12,7 +12,11 @@ import java.net.URL
 class SyncManager(private val context: Context) {
 
     companion object {
-        const val API_BASE_URL = "http://192.168.18.22/cafetin-view-api"
+        // Si mod_rewrite funciona: usa esta URL
+        const val API_BASE_URL = "http://192.168.18.22/cafetin-view-api/index.php"
+
+        // Si mod_rewrite NO funciona en XAMPP: usa index.php directamente
+        // const val API_BASE_URL = "http://192.168.18.22/cafetin-view-api/index.php"
     }
 
     fun isOnline(): Boolean {
@@ -33,7 +37,10 @@ class SyncManager(private val context: Context) {
             dbFile.copyTo(tempFile, overwrite = true)
 
             val boundary = "----CafetinBoundary${System.currentTimeMillis()}"
-            val conn = (URL("$API_BASE_URL/upload").openConnection() as HttpURLConnection).apply {
+
+            // ✅ URL directa a index.php — funciona con o sin mod_rewrite
+            val uploadUrl = "$API_BASE_URL/upload"
+            val conn = (URL(uploadUrl).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 doOutput = true
                 connectTimeout = 10_000
@@ -59,7 +66,7 @@ class SyncManager(private val context: Context) {
             conn.disconnect()
 
             if (code == 200) Result.success("Sincronizado correctamente")
-            else Result.failure(Exception("Error del servidor: $code — $body"))
+            else Result.failure(Exception("Error $code: $body"))
 
         } catch (e: Exception) {
             Result.failure(e)
