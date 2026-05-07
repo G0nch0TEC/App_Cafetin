@@ -3,6 +3,7 @@ package com.proyecto.cafetin.sync
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import com.proyecto.cafetin.data.db.AppDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -30,16 +31,34 @@ class SyncManager(private val context: Context) {
         try {
             if (!isOnline()) return@withContext Result.failure(Exception("Sin conexión a internet"))
 
-            val dbFile = context.getDatabasePath("cafetin_db")
-            if (!dbFile.exists()) return@withContext Result.failure(Exception("Base de datos no encontrada"))
+            val db = AppDatabase.getInstance(context)
 
+            // Fuerza a SQLite/Room a pasar los cambios del WAL
+            // hacia la base principal antes de copiarla
+            // Fuerza WAL -> DB principal
+            db.openHelper.writableDatabase
+                .query("PRAGMA wal_checkpoint(FULL)")
+                .close()
+
+            // Cierra Room completamente
+            db.close()
+
+            // Pequeña pausa para asegurar escritura física
+            Thread.sleep(300)
+
+            val dbFile = context.getDatabasePath("cafetin_db")
+            if (!dbFile.exists())
+                return@withContext Result.failure(
+                    Exception("Base de datos no encontrada")
+                )
             val tempFile = File(context.cacheDir, "cafetin_db_upload.db")
             dbFile.copyTo(tempFile, overwrite = true)
+
 
             val boundary = "----CafetinBoundary${System.currentTimeMillis()}"
 
             // ✅ URL directa a index.php — funciona con o sin mod_rewrite
-            val uploadUrl = "$API_BASE_URL/upload"
+            val uploadUrl = "$API_BASE_URL?_route=upload"
             val conn = (URL(uploadUrl).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 doOutput = true
@@ -58,15 +77,18 @@ class SyncManager(private val context: Context) {
             val code = conn.responseCode
             val body = try {
                 conn.inputStream.bufferedReader().readText()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 conn.errorStream?.bufferedReader()?.readText() ?: "sin respuesta"
             }
 
             tempFile.delete()
             conn.disconnect()
 
-            if (code == 200) Result.success("Sincronizado correctamente")
-            else Result.failure(Exception("Error $code: $body"))
+            if (code == 200) {
+                Result.success("Respuesta API:\n$body")
+            } else {
+                Result.failure(Exception("Error $code:\n$body"))
+            }
 
         } catch (e: Exception) {
             Result.failure(e)

@@ -171,8 +171,10 @@ fun PersonasScreen(
                                 sincronizando = true
                                 val result = syncManager.sincronizar()
                                 sincronizando = false
-                                val msg = if (result.isSuccess) "✓ Sincronizado correctamente"
-                                          else "✗ Error: ${result.exceptionOrNull()?.message}"
+                                val msg = if (result.isSuccess)
+                                    result.getOrNull() ?: "Sincronizado"
+                                else
+                                    "✗ Error: ${result.exceptionOrNull()?.message}"
                                 snackbarHostState.showSnackbar(msg)
                             }
                         },
