@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -56,6 +57,7 @@ private val AFavorFg  = Color(0xFF1565C0)
 fun PersonasScreen(
     onPersonaClick: (Int) -> Unit,
     onHistorialClick: () -> Unit,
+    onBackupClick: () -> Unit,          // ← NUEVO
 ) {
     val context    = LocalContext.current
     val repository = (context.applicationContext as CafetinApp).container.repository
@@ -200,6 +202,13 @@ fun PersonasScreen(
                             imageVector        = Icons.Default.DateRange,
                             contentDescription = "Ver historial",
                             tint               = PrimaryColor
+                        )
+                    }
+
+                    IconButton(onClick = onBackupClick) {
+                        Icon(
+                            imageVector = Icons.Default.Backup,  // o usa Icons.Default.Save
+                            contentDescription = "Respaldo"
                         )
                     }
                 }

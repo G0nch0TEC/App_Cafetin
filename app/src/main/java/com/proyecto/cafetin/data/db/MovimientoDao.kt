@@ -84,4 +84,5 @@ interface MovimientoDao {
 
     @Delete
     suspend fun delete(movimiento: Movimiento)
+
 }
