@@ -79,10 +79,6 @@ object PdfExporter {
     ): File? = runCatching {
 
         val movOrdenados  = movimientos.sortedBy { it.fecha }
-        val totalFiado    = movimientos.filter { it.tipo == TipoMovimiento.FIADO }.sumOf { it.monto }
-        val totalCobrado  = movimientos.filter { it.tipo == TipoMovimiento.PAGO  }.sumOf { it.monto }
-        // pendiente del período (solo informativo en los totales de tabla)
-        val pendiente     = totalFiado - totalCobrado
         // El saldo real es el que viene de TODA la historia del cliente
         val saldoPendienteReal = saldoRealCentavos
         val totalPaginas  = estimarPaginas(movOrdenados.size)
@@ -121,9 +117,6 @@ object PdfExporter {
         y = dibujarHeaderPrincipal(
             canvas, nombrePersona, descripcionPersona, desde, hasta
         )
-
-        // ── Bloque resumen destacado ──────────────────────────────────────────
-        y = dibujarResumen(canvas, y, totalFiado, totalCobrado, pendiente, saldoPendienteReal)
 
         // ── Cabecera de tabla ─────────────────────────────────────────────────
         y = dibujarCabeceraTabla(canvas, y)
@@ -234,19 +227,6 @@ object PdfExporter {
         canvas.drawLine(MARGIN, y, MARGIN + CONTENT_W, y, linePaint(C_LINE, 1f))
         y += 16f
 
-        // Filas total fiado / cobrado
-        fun drawTotalRow(label: String, valor: String, colorValor: Int) {
-            canvas.drawText(label, MARGIN + CONTENT_W - 160f, y, paint(C_GRAY, 11f))
-            canvas.drawText(
-                valor, MARGIN + CONTENT_W, y,
-                paint(colorValor, 11f, bold = true, align = Paint.Align.RIGHT)
-            )
-            y += 18f
-        }
-
-        drawTotalRow("Total fiado:",   totalFiado.centavosAtexto(),   C_RED)
-        drawTotalRow("Total cobrado:", totalCobrado.centavosAtexto(), C_GREEN)
-
         // ── Caja de saldo pendiente (protagonista) ────────────────────────────
         y += 6f
         val saldoPositivo = saldoPendienteReal > 0L
@@ -268,14 +248,11 @@ object PdfExporter {
             MARGIN + 16f, y + 22f,
             paint(fgSaldo, 11f, bold = true)
         )
-        // Nota aclaratoria si el saldo real difiere del saldo del período
-        if (saldoPendienteReal != pendiente) {
-            canvas.drawText(
-                "(incluye deuda de períodos anteriores)",
-                MARGIN + 16f, y + 38f,
-                paint(fgSaldo, 8f)
-            )
-        }
+        canvas.drawText(
+            "(incluye deuda de períodos anteriores)",
+            MARGIN + 16f, y + 38f,
+            paint(fgSaldo, 8f)
+        )
         canvas.drawText(
             saldoPendienteReal.centavosAtexto(),
             MARGIN + CONTENT_W - 10f, y + 35f,
@@ -370,56 +347,6 @@ object PdfExporter {
             PAGE_WIDTH - MARGIN, 22f,
             paint(Color.argb(180, 255, 255, 255), 9f, align = Paint.Align.RIGHT)
         )
-    }
-
-    // ── Bloque de resumen (3 fichas) ──────────────────────────────────────────
-    private fun dibujarResumen(
-        canvas: android.graphics.Canvas,
-        y: Float,
-        totalFiado: Long,
-        totalCobrado: Long,
-        pendiente: Long,
-        saldoPendienteReal: Long
-    ): Float {
-        val cardW = (CONTENT_W - 12f) / 3f
-        val cardH = 58f
-
-        data class Card(val label: String, val valor: String, val bg: Int, val fg: Int)
-
-        val cards = listOf(
-            Card("Total fiado",   totalFiado.centavosAtexto(),   C_RED_LT,   C_RED),
-            Card("Total cobrado", totalCobrado.centavosAtexto(), C_GREEN_LT, C_GREEN),
-            Card(
-                if (saldoPendienteReal > 0) "Saldo pendiente total" else "Cuenta al día",
-                saldoPendienteReal.centavosAtexto(),
-                if (saldoPendienteReal > 0) C_RED_LT else C_GREEN_LT,
-                if (saldoPendienteReal > 0) C_RED    else C_GREEN
-            )
-        )
-
-        cards.forEachIndexed { i, card ->
-            val x = MARGIN + i * (cardW + 6f)
-            val rect = RectF(x, y, x + cardW, y + cardH)
-            canvas.drawRoundRect(rect, 8f, 8f, fillPaint(card.bg))
-            canvas.drawRoundRect(rect, 8f, 8f, linePaint(card.fg, 1f))
-
-            // barra superior de color
-            val topRect = RectF(x, y, x + cardW, y + 4f)
-            canvas.drawRoundRect(topRect, 4f, 4f, fillPaint(card.fg))
-
-            canvas.drawText(
-                card.label,
-                x + 8f, y + 20f,
-                paint(C_GRAY, 9f)
-            )
-            canvas.drawText(
-                card.valor,
-                x + 8f, y + 46f,
-                paint(card.fg, 14f, bold = true)
-            )
-        }
-
-        return y + cardH + 18f
     }
 
     // ── Cabecera de tabla ─────────────────────────────────────────────────────
