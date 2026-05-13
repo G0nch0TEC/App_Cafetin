@@ -15,6 +15,8 @@ interface IMovimientoRepository {
     fun cobradoHoy(): Flow<Long>
     suspend fun registrarFiado(personaId: Int, montoCentavos: Long, nota: String)
     suspend fun registrarPago(personaId: Int, montoCentavos: Long, nota: String)
+    /** Inserta un movimiento conservando la fecha original (usado en restauración de backup). */
+    suspend fun insertarMovimientoDirecto(movimiento: Movimiento)
     suspend fun editarMovimiento(movimiento: Movimiento)
     suspend fun eliminarMovimiento(movimiento: Movimiento)
 }

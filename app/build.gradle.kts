@@ -54,6 +54,8 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
 
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+
     // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)

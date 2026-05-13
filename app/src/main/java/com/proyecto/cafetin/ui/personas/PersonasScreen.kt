@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -57,7 +58,8 @@ private val AFavorFg  = Color(0xFF1565C0)
 fun PersonasScreen(
     onPersonaClick: (Int) -> Unit,
     onHistorialClick: () -> Unit,
-    onBackupClick: () -> Unit,          // ← NUEVO
+    onBackupClick: () -> Unit,
+    onScanQrClick: () -> Unit,
 ) {
     val context    = LocalContext.current
     val repository = (context.applicationContext as CafetinApp).container.repository
@@ -209,6 +211,14 @@ fun PersonasScreen(
                         Icon(
                             imageVector = Icons.Default.Backup,  // o usa Icons.Default.Save
                             contentDescription = "Respaldo"
+                        )
+                    }
+
+                    IconButton(onClick = onScanQrClick) {
+                        Icon(
+                            imageVector        = Icons.Default.QrCodeScanner,
+                            contentDescription = "Escanear QR web",
+                            tint               = PrimaryColor
                         )
                     }
                 }
@@ -660,7 +670,7 @@ private fun EliminarPersonaDialog(
         text  = {
             Text(
                 "¿Estás seguro de que quieres eliminar a \"${persona.nombre}\"? " +
-                "Se eliminará también todo su historial de movimientos. Esta acción no se puede deshacer."
+                        "Se eliminará también todo su historial de movimientos. Esta acción no se puede deshacer."
             )
         },
         confirmButton = {

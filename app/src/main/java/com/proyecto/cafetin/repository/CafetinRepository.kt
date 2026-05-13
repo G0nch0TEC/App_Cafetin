@@ -57,6 +57,10 @@ class CafetinRepository(db: AppDatabase, context: Context) : ICafetinRepository 
         )
     }
 
+    override suspend fun insertarMovimientoDirecto(movimiento: Movimiento) {
+        movimientoDao.insert(movimiento)
+    }
+
     override suspend fun editarMovimiento(movimiento: Movimiento)   { movimientoDao.update(movimiento) }
     override suspend fun eliminarMovimiento(movimiento: Movimiento) { movimientoDao.delete(movimiento) }
 

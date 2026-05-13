@@ -217,22 +217,25 @@ class BackupManager(
             if (insertada != null) mapPersona[idViejo] = insertada.id
         }
 
-        // 5. Insertar movimientos (remapeando personaId)
+        // 5. Insertar movimientos conservando la fecha original
         val jsonMovimientos = json.getJSONArray("movimientos")
         for (i in 0 until jsonMovimientos.length()) {
             val obj = jsonMovimientos.getJSONObject(i)
             val personaIdViejo = obj.getInt("personaId")
             val personaIdNuevo = mapPersona[personaIdViejo] ?: continue
-            val tipo = TipoMovimiento.valueOf(obj.getString("tipo"))
+            val tipo  = TipoMovimiento.valueOf(obj.getString("tipo"))
             val monto = obj.getLong("monto")
-            val nota = obj.optString("nota", "")
-            // Usamos registrar* para respetar la lógica del repositorio
-            when (tipo) {
-                TipoMovimiento.FIADO -> repository.registrarFiado(personaIdNuevo, monto, nota)
-                TipoMovimiento.PAGO  -> repository.registrarPago(personaIdNuevo, monto, nota)
-            }
-            // Nota: la fecha original se pierde al usar registrar*
-            // Para preservarla, necesitarías un método insertMovimientoDirecto en el repo
+            val fecha = obj.getLong("fecha")          // ← fecha original preservada
+            val nota  = obj.optString("nota", "")
+            repository.insertarMovimientoDirecto(
+                Movimiento(
+                    personaId = personaIdNuevo,
+                    tipo      = tipo,
+                    monto     = monto,
+                    fecha     = fecha,
+                    nota      = nota
+                )
+            )
         }
     }
 

@@ -11,6 +11,7 @@ import com.proyecto.cafetin.ui.catalogo.CatalogoScreen
 import com.proyecto.cafetin.ui.detalle.DetalleScreen
 import com.proyecto.cafetin.ui.historial.HistorialScreen
 import com.proyecto.cafetin.ui.personas.PersonasScreen
+import com.proyecto.cafetin.ui.screen.ScanQrScreen
 
 @Composable
 fun NavGraph() {
@@ -19,9 +20,10 @@ fun NavGraph() {
     NavHost(navController = navController, startDestination = Routes.PERSONAS) {
         composable(Routes.PERSONAS) {
             PersonasScreen(
-                onPersonaClick = { id -> navController.navigate(Routes.detalle(id)) },
+                onPersonaClick   = { id -> navController.navigate(Routes.detalle(id)) },
                 onHistorialClick = { navController.navigate(Routes.HISTORIAL) },
-                onBackupClick = { navController.navigate(Routes.BACKUP) }
+                onBackupClick    = { navController.navigate(Routes.BACKUP) },
+                onScanQrClick    = { navController.navigate("scan_qr") }
             )
         }
 
@@ -47,6 +49,10 @@ fun NavGraph() {
 
         composable(Routes.BACKUP) {
             BackupScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable("scan_qr") {
+            ScanQrScreen(onVolver = { navController.popBackStack() })
         }
     }
 }
