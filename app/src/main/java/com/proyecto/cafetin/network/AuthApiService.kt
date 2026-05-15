@@ -13,7 +13,7 @@ import java.net.URL
 object AuthApiService {
 
     // ⚠️ Debe coincidir con API_BASE_URL del resto de la app
-    private const val API_BASE = "http://192.168.18.22/cafetin-view-api/index.php"
+    private const val API_BASE = "https://cafetin-view-api-production.up.railway.app/index.php"
 
     sealed class ResultadoAuth {
         object Exito    : ResultadoAuth()

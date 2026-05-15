@@ -13,11 +13,8 @@ import java.net.URL
 class SyncManager(private val context: Context) {
 
     companion object {
-        // Si mod_rewrite funciona: usa esta URL
-        const val API_BASE_URL = "http://192.168.18.22/cafetin-view-api/index.php"
-
-        // Si mod_rewrite NO funciona en XAMPP: usa index.php directamente
-        // const val API_BASE_URL = "http://192.168.18.22/cafetin-view-api/index.php"
+        const val API_BASE_URL = "https://cafetin-view-api-production.up.railway.app/index.php"
+        private const val UPLOAD_API_KEY = "cafetin2026xK9mP"
     }
 
     fun isOnline(): Boolean {
@@ -33,17 +30,12 @@ class SyncManager(private val context: Context) {
 
             val db = AppDatabase.getInstance(context)
 
-            // Fuerza a SQLite/Room a pasar los cambios del WAL
-            // hacia la base principal antes de copiarla
-            // Fuerza WAL -> DB principal
             db.openHelper.writableDatabase
                 .query("PRAGMA wal_checkpoint(FULL)")
                 .close()
 
-            // Cierra Room completamente
             db.close()
 
-            // Pequeña pausa para asegurar escritura física
             Thread.sleep(300)
 
             val dbFile = context.getDatabasePath("cafetin_db")
@@ -54,17 +46,16 @@ class SyncManager(private val context: Context) {
             val tempFile = File(context.cacheDir, "cafetin_db_upload.db")
             dbFile.copyTo(tempFile, overwrite = true)
 
-
             val boundary = "----CafetinBoundary${System.currentTimeMillis()}"
-
-            // ✅ URL directa a index.php — funciona con o sin mod_rewrite
             val uploadUrl = "$API_BASE_URL?_route=upload"
+
             val conn = (URL(uploadUrl).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 doOutput = true
                 connectTimeout = 10_000
                 readTimeout = 30_000
                 setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                setRequestProperty("X-Api-Key", UPLOAD_API_KEY)
             }
 
             conn.outputStream.use { out ->
