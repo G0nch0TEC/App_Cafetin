@@ -10,7 +10,8 @@ class SyncWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val syncManager = SyncManager(applicationContext)
+        val deviceId = (applicationContext as com.proyecto.cafetin.CafetinApp).container.deviceId
+        val syncManager = SyncManager(applicationContext, deviceId)
         return if (syncManager.isOnline()) {
             val resultado = syncManager.sincronizar()
             if (resultado.isSuccess) Result.success() else Result.retry()

@@ -16,44 +16,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.zxing.integration.android.IntentIntegrator
 import com.proyecto.cafetin.network.AuthApiService
+import com.proyecto.cafetin.sync.SyncManager
 import kotlinx.coroutines.launch
 
-/**
- * Pantalla de autenticación QR.
- *
- * Flujo:
- *  1. El usuario toca "Escanear QR"
- *  2. Se abre el escáner de cámara (ZXing)
- *  3. Al leer el QR se llama al servidor para confirmar el token
- *  4. Se muestra éxito o error
- *
- * ─── Cómo integrar ─────────────────────────────────────────────────────────
- *
- * 1. En app/build.gradle (module), dentro de dependencies:
- *
- *      implementation("com.journeyapps:zxing-android-embedded:4.3.0")
- *
- * 2. En tu NavGraph.kt, añadir la ruta:
- *
- *      composable("scan_qr") {
- *          ScanQrScreen(onVolver = { navController.popBackStack() })
- *      }
- *
- * 3
- *
- * ───────────────────────────────────────────────────────────────────────────
- */
 @Composable
 fun ScanQrScreen(
     onVolver: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope   = rememberCoroutineScope()
+    val deviceId = remember {
+        (context.applicationContext as com.proyecto.cafetin.CafetinApp).container.deviceId
+    }
 
-    // Estados de UI
     var estado by remember { mutableStateOf<EstadoScan>(EstadoScan.Espera) }
 
-    // Lanzador del escáner ZXing
     val scanLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -67,16 +44,20 @@ fun ScanQrScreen(
             estado = EstadoScan.Cargando
 
             scope.launch {
-                when (val res = AuthApiService.confirmarToken(token)) {
-                    is AuthApiService.ResultadoAuth.Exito ->
+                when (val res = AuthApiService.confirmarToken(token, context)) {
+                    is AuthApiService.ResultadoAuth.Exito -> {
+                        // ── Sync automático al confirmar QR ──────────────
+                        try {
+                            SyncManager(context, deviceId).sincronizar()
+                        } catch (_: Exception) { /* sync falla silenciosamente */ }
+                        // ─────────────────────────────────────────────────
                         estado = EstadoScan.Exito
-
+                    }
                     is AuthApiService.ResultadoAuth.Error ->
                         estado = EstadoScan.Error(res.mensaje)
                 }
             }
         } else {
-            // El usuario canceló el escáner
             if (estado !is EstadoScan.Exito) {
                 estado = EstadoScan.Espera
             }
@@ -93,7 +74,6 @@ fun ScanQrScreen(
         scanLauncher.launch(integrator.createScanIntent())
     }
 
-    // ── UI ────────────────────────────────────────────
     Scaffold(
         topBar = {
             @OptIn(ExperimentalMaterial3Api::class)
@@ -146,7 +126,7 @@ fun ScanQrScreen(
                 EstadoScan.Cargando -> {
                     CircularProgressIndicator()
                     Spacer(Modifier.height(16.dp))
-                    Text("Autorizando acceso...")
+                    Text("Autorizando y sincronizando...")
                 }
 
                 EstadoScan.Exito -> {
@@ -198,8 +178,6 @@ fun ScanQrScreen(
         }
     }
 }
-
-// ── Estados internos ──────────────────────────────────
 
 private sealed class EstadoScan {
     object Espera   : EstadoScan()

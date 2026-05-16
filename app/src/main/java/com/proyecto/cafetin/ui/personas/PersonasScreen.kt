@@ -62,8 +62,8 @@ fun PersonasScreen(
     onScanQrClick: () -> Unit,
 ) {
     val context    = LocalContext.current
-    val repository = (context.applicationContext as CafetinApp).container.repository
-    val vm: PersonasViewModel = viewModel(factory = PersonasViewModel.Factory(repository))
+    val app = context.applicationContext as CafetinApp
+    val vm: PersonasViewModel = viewModel(factory = PersonasViewModel.Factory(app))
 
     val personas         by vm.personas.collectAsState()
     val saldoTotal       by vm.saldoTotal.collectAsState()
@@ -83,7 +83,7 @@ fun PersonasScreen(
     // Estado del sync manual
     var sincronizando by remember { mutableStateOf(false) }
     val scope         = rememberCoroutineScope()
-    val syncManager   = remember { SyncManager(context) }
+    val syncManager   = remember { SyncManager(context, app.container.deviceId) }
 
     val listState         = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }

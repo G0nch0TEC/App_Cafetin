@@ -10,6 +10,9 @@ interface PersonaDao {
     @Query("SELECT * FROM personas ORDER BY nombre ASC")
     fun getAll(): Flow<List<Persona>>
 
+    @Query("SELECT * FROM personas ORDER BY nombre ASC")
+    suspend fun getAllSnapshot(): List<Persona>
+
     @Insert
     suspend fun insert(persona: Persona)
 

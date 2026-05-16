@@ -6,11 +6,12 @@ import android.net.NetworkCapabilities
 import com.proyecto.cafetin.data.db.AppDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
+import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-class SyncManager(private val context: Context) {
+class SyncManager(private val context: Context, private val deviceId: String) {
 
     companion object {
         const val API_BASE_URL = "https://cafetin-view-api-production.up.railway.app/index.php"
@@ -28,58 +29,90 @@ class SyncManager(private val context: Context) {
         try {
             if (!isOnline()) return@withContext Result.failure(Exception("Sin conexión a internet"))
 
-            val db = AppDatabase.getInstance(context)
+            val db            = AppDatabase.getInstance(context)
+            val personaDao    = db.personaDao()
+            val movimientoDao = db.movimientoDao()
+            val catalogoDao   = db.catalogoDao()
 
-            db.openHelper.writableDatabase
-                .query("PRAGMA wal_checkpoint(FULL)")
-                .close()
+            val personas    = personaDao.getAllSnapshot()
+            val movimientos = movimientoDao.getAllSnapshot()
+            val categorias  = catalogoDao.getAllCategoriasSnapshot()
+            val productos   = catalogoDao.getAllProductosSnapshot()
 
-            db.close()
+            val payload = JSONObject().apply {
+                put("personas", JSONArray().also { arr ->
+                    personas.forEach { p ->
+                        arr.put(JSONObject().apply {
+                            put("id", p.id)
+                            put("nombre", p.nombre)
+                            put("descripcion", p.descripcion)
+                            put("enviadoHasta", p.enviadoHasta)
+                        })
+                    }
+                })
+                put("movimientos", JSONArray().also { arr ->
+                    movimientos.forEach { m ->
+                        arr.put(JSONObject().apply {
+                            put("id", m.id)
+                            put("personaId", m.personaId)
+                            put("tipo", m.tipo.name)
+                            put("monto", m.monto)
+                            put("fecha", m.fecha)
+                            put("nota", m.nota)
+                        })
+                    }
+                })
+                put("categorias", JSONArray().also { arr ->
+                    categorias.forEach { c ->
+                        arr.put(JSONObject().apply {
+                            put("id", c.id)
+                            put("nombre", c.nombre)
+                            put("emoji", c.emoji)
+                            put("orden", c.orden)
+                        })
+                    }
+                })
+                put("productos", JSONArray().also { arr ->
+                    productos.forEach { p ->
+                        arr.put(JSONObject().apply {
+                            put("id", p.id)
+                            put("categoriaId", p.categoriaId)
+                            put("nombre", p.nombre)
+                            put("montoCentavos", p.montoCentavos)
+                            put("orden", p.orden)
+                        })
+                    }
+                })
+            }
 
-            Thread.sleep(300)
-
-            val dbFile = context.getDatabasePath("cafetin_db")
-            if (!dbFile.exists())
-                return@withContext Result.failure(
-                    Exception("Base de datos no encontrada")
-                )
-            val tempFile = File(context.cacheDir, "cafetin_db_upload.db")
-            dbFile.copyTo(tempFile, overwrite = true)
-
-            val boundary = "----CafetinBoundary${System.currentTimeMillis()}"
+            val body      = payload.toString()
             val uploadUrl = "$API_BASE_URL?_route=upload"
 
             val conn = (URL(uploadUrl).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
-                doOutput = true
+                doOutput      = true
                 connectTimeout = 10_000
-                readTimeout = 30_000
-                setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-                setRequestProperty("X-Api-Key", UPLOAD_API_KEY)
+                readTimeout    = 30_000
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                setRequestProperty("X-Api-Key",  UPLOAD_API_KEY)
+                setRequestProperty("X-Device-Id", deviceId)
             }
 
             conn.outputStream.use { out ->
-                val header = "--$boundary\r\nContent-Disposition: form-data; name=\"db\"; filename=\"cafetin_db\"\r\nContent-Type: application/octet-stream\r\n\r\n"
-                out.write(header.toByteArray())
-                tempFile.inputStream().use { it.copyTo(out) }
-                out.write("\r\n--$boundary--\r\n".toByteArray())
+                out.write(body.toByteArray(Charsets.UTF_8))
             }
 
-            val code = conn.responseCode
-            val body = try {
+            val code     = conn.responseCode
+            val respBody = try {
                 conn.inputStream.bufferedReader().readText()
             } catch (_: Exception) {
                 conn.errorStream?.bufferedReader()?.readText() ?: "sin respuesta"
             }
 
-            tempFile.delete()
             conn.disconnect()
 
-            if (code == 200) {
-                Result.success("Respuesta API:\n$body")
-            } else {
-                Result.failure(Exception("Error $code:\n$body"))
-            }
+            if (code == 200) Result.success("Sincronizado")
+            else Result.failure(Exception("Error $code: $respBody"))
 
         } catch (e: Exception) {
             Result.failure(e)

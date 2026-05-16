@@ -11,6 +11,7 @@ import com.proyecto.cafetin.data.model.Persona
 import com.proyecto.cafetin.domain.usecase.AcumularProductoUseCase
 import com.proyecto.cafetin.domain.usecase.ExportarPdfUseCase
 import com.proyecto.cafetin.repository.ICafetinRepository
+import com.proyecto.cafetin.sync.SyncManager
 import com.proyecto.cafetin.util.DateUtils.desdeDatePicker
 import com.proyecto.cafetin.util.DateUtils.finDeDia
 import com.proyecto.cafetin.util.DateUtils.finDeDiaHoy
@@ -20,15 +21,21 @@ import com.proyecto.cafetin.util.NotaUtils.cantidadDeNota
 import com.proyecto.cafetin.util.NotaUtils.notaBase
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class DetalleViewModel(
     private val repository: ICafetinRepository,
     val personaId: Int,
     private val appContext: Context,
+    private val deviceId: String,
     private val acumularProductoUseCase: AcumularProductoUseCase = AcumularProductoUseCase(repository),
     private val exportarPdfUseCase: ExportarPdfUseCase = ExportarPdfUseCase(repository, appContext)
 ) : ViewModel() {
+
+    private val syncManager = SyncManager(appContext, deviceId)
 
     private val _persona = MutableStateFlow<Persona?>(null)
     val persona: StateFlow<Persona?> = _persona.asStateFlow()
@@ -39,7 +46,6 @@ class DetalleViewModel(
     val movimientos: StateFlow<List<Movimiento>> = repository.movimientosPorPersonaHoy(personaId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Catálogo dinámico cargado desde la base de datos */
     private val _catalogoCategorias = MutableStateFlow<List<CategoriaConProductos>>(emptyList())
     val catalogoCategorias: StateFlow<List<CategoriaConProductos>> = _catalogoCategorias.asStateFlow()
 
@@ -63,7 +69,6 @@ class DetalleViewModel(
                 _persona.value = lista.find { it.id == personaId }
             }
         }
-        // Re-carga el catálogo cuando cambian categorías O productos
         viewModelScope.launch {
             combine(
                 repository.getCategoriasFlow(),
@@ -75,12 +80,38 @@ class DetalleViewModel(
         }
     }
 
+    /** Sincroniza en segundo plano sin bloquear la UI */
+    private var syncJob: Job? = null
+    private var pendingSync = false
+
+    private fun sincronizar() {
+        pendingSync = true
+        syncJob?.cancel()
+        syncJob = viewModelScope.launch {
+            delay(3_000)
+            pendingSync = false
+            try { syncManager.sincronizar() } catch (_: Exception) {}
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        if (pendingSync) {
+            // viewModelScope ya está cancelado — usamos un scope desacoplado para
+            // que el sync llegue al servidor aunque el usuario haya navegado.
+            kotlinx.coroutines.CoroutineScope(SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+                try { syncManager.sincronizar() } catch (_: Exception) {}
+            }
+        }
+    }
+
     fun editarPersona(nombre: String, descripcion: String) {
         val actual = _persona.value ?: return
         viewModelScope.launch {
             try {
                 repository.updatePersona(actual.copy(nombre = nombre.trim(), descripcion = descripcion.trim()))
                 _snackEvents.send("Datos actualizados")
+                sincronizar()
             } catch (e: android.database.sqlite.SQLiteConstraintException) {
                 _snackEvents.send("Ya existe un cliente con ese nombre y descripción")
             }
@@ -91,6 +122,7 @@ class DetalleViewModel(
         viewModelScope.launch {
             repository.registrarFiado(personaId, montoCentavos, nota)
             _snackEvents.send("$nota anotado — ${montoCentavos.centavosAtexto()}")
+            sincronizar()
         }
     }
 
@@ -103,6 +135,7 @@ class DetalleViewModel(
                 precioCentavos = precioCentavos
             )
             _snackEvents.send(mensaje)
+            sincronizar()
         }
     }
 
@@ -118,6 +151,7 @@ class DetalleViewModel(
                 val nuevaNota     = "$notaBaseStr x$nuevaCantidad"
                 repository.editarMovimiento(mov.copy(monto = nuevoMonto, nota = nuevaNota))
             }
+            sincronizar()
         }
     }
 
@@ -125,11 +159,15 @@ class DetalleViewModel(
         viewModelScope.launch {
             repository.registrarPago(personaId, montoCentavos, "Pago")
             _snackEvents.send("Pago registrado — ${montoCentavos.centavosAtexto()}")
+            sincronizar()
         }
     }
 
     fun eliminarMovimiento(mov: Movimiento) {
-        viewModelScope.launch { repository.eliminarMovimiento(mov) }
+        viewModelScope.launch {
+            repository.eliminarMovimiento(mov)
+            sincronizar()
+        }
     }
 
     fun enviarError(msg: String) {
@@ -174,17 +212,12 @@ class DetalleViewModel(
                     )
                 is ExportarPdfUseCase.Resultado.Exito -> {
                     _exportState.value = ExportState(mostrando = false)
-                    // Solo lanzamos el share sheet; el marcado ocurre en confirmarEnviado()
                     _eventos.send(DetalleEvent.CompartirPdf(resultado.uri))
                 }
             }
         }
     }
 
-    /**
-     * Llamar después de que el usuario completó el share sheet (no canceló).
-     * Marca a la persona como "Enviado" hasta el final del día actual.
-     */
     fun confirmarEnviado() {
         val persona = _persona.value ?: return
         viewModelScope.launch {
@@ -192,9 +225,6 @@ class DetalleViewModel(
         }
     }
 
-    /**
-     * Quita manualmente el marcador "Enviado" de la persona actual.
-     */
     fun quitarEnviado() {
         val persona = _persona.value ?: return
         viewModelScope.launch {
@@ -208,8 +238,8 @@ class DetalleViewModel(
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            val repo = (app as CafetinApp).container.repository
-            return DetalleViewModel(repo, personaId, app.applicationContext) as T
+            val container = (app as CafetinApp).container
+            return DetalleViewModel(container.repository, personaId, app.applicationContext, container.deviceId) as T
         }
     }
 }

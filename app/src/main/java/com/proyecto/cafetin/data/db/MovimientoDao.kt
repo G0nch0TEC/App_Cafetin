@@ -76,6 +76,9 @@ interface MovimientoDao {
     """)
     fun getCobradoDesde(desdeFecha: Long): Flow<Long>
 
+    @Query("SELECT * FROM movimientos ORDER BY fecha DESC")
+    suspend fun getAllSnapshot(): List<Movimiento>
+
     @Insert
     suspend fun insert(movimiento: Movimiento)
 
