@@ -112,7 +112,7 @@ Los ViewModels nunca conocen `Intent` ni `Context` de Activity. Los eventos de U
 
 ```bash
 # 1. Clona el repositorio
-git clone https://github.com/tu-usuario/App_Cafetin.git
+git clone https://github.com/G0nch0TEC/App_Cafetin.git
 
 # 2. Abre el proyecto en Android Studio
 # File → Open → selecciona la carpeta App_Cafetin
